@@ -24,7 +24,7 @@
   var state = {
     route: null,
     depth: 1,
-    show: { article: true, recital: true, annex: true, definition: false },
+    show: { article: true, recital: true, annex: true, definition: true },
     ovShow: { article: true, recital: true, annex: true, definition: true }
   };
 
