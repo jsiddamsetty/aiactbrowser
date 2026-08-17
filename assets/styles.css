@@ -845,3 +845,229 @@ sup.fn:hover { color: var(--accent); }
 }
 
 .seg[hidden] { display: none; }
+
+/* ============================================================
+   Amendments — the 2026 Digital Omnibus layer
+   Change state is an editorial annotation, not a fifth category,
+   so it never borrows one of the four node hues. It reads as a
+   neutral slate mark, always paired with a word.
+   ============================================================ */
+
+:root {
+  --chg-rule:  #8A6A2F;
+  --chg-bg:    #CC6F000f;
+  --ins-ink:   #14603F;
+  --ins-bg:    #00A38C24;
+  --del-ink:   #8C2141;
+  --del-bg:    #A308770f;
+}
+[data-theme="dark"] {
+  --chg-rule:  #C9A24A;
+  --chg-bg:    #AF860020;
+  --ins-ink:   #5FD3AE;
+  --ins-bg:    #00AD7F26;
+  --del-ink:   #F08CBE;
+  --del-bg:    #B93C8C26;
+}
+
+/* changed blocks, marked inside the running text */
+.lawtext [data-chg] {
+  border-left: 2px solid var(--chg-rule);
+  padding-left: 14px;
+  margin-left: -16px;
+  background: var(--chg-bg);
+  border-radius: 0 3px 3px 0;
+}
+.lawtext .para[data-chg] { padding-top: 2px; padding-bottom: 2px; }
+.lawtext [data-chg]::after {
+  content: attr(data-op) " 2026";
+  display: block;
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--chg-rule);
+  margin-top: 4px;
+}
+.doc-deleted {
+  font-family: var(--sans); font-size: 12.5px;
+  color: var(--ink-3); font-style: italic;
+  margin: 0 0 1em;
+}
+.para-n { font-weight: 600; }
+
+/* badges */
+.kicker-chg {
+  text-decoration: none;
+  background: var(--chg-bg);
+  color: var(--chg-rule);
+  margin-left: 6px;
+}
+.kicker-chg:hover { background: color-mix(in srgb, var(--chg-rule) 18%, transparent); }
+
+.tl-chg {
+  margin-left: auto; flex: none;
+  font-family: var(--mono); font-size: 9px; font-weight: 500;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--chg-rule);
+  border: 1px solid color-mix(in srgb, var(--chg-rule) 40%, transparent);
+  border-radius: 3px; padding: 0 3px; align-self: center;
+}
+
+/* home banner */
+.banner {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  text-decoration: none;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--chg-rule);
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 13px 16px;
+  margin: 0 0 32px;
+}
+.banner:hover { background: var(--sunk); }
+.banner-tag {
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--chg-rule);
+  background: var(--chg-bg);
+  border-radius: 999px; padding: 3px 9px; flex: none;
+}
+.banner-text { font-size: 13.5px; color: var(--ink-2); min-width: 0; }
+.banner-text b { color: var(--ink); font-weight: 600; }
+.banner-go {
+  margin-left: auto; flex: none;
+  font-size: 12.5px; font-weight: 500; color: var(--accent);
+}
+
+/* filter chips */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 26px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 999px;
+  padding: 5px 12px; cursor: pointer;
+  font-size: 12.5px;
+}
+.chip:hover { border-color: var(--ink-3); }
+.chip.is-on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.chip-n { font-family: var(--mono); font-size: 10.5px; opacity: .65; }
+
+.stat[data-status] .stat-n { color: var(--chg-rule); }
+
+/* change cards */
+.chg-list { display: flex; flex-direction: column; }
+.chg { border-bottom: 1px solid var(--rule-2); }
+.chg.is-focus { background: var(--chg-bg); }
+.chg-head {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: none; border: 0; cursor: pointer; text-align: left;
+  padding: 12px 4px;
+}
+.chg-head:hover { background: var(--sunk); }
+.chg-badge {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  border-radius: 4px; padding: 2px 6px; flex: none;
+  color: var(--chg-rule);
+  border: 1px solid color-mix(in srgb, var(--chg-rule) 40%, transparent);
+}
+.chg-badge[data-status="inserted"] {
+  color: var(--ins-ink); background: var(--ins-bg);
+  border-color: color-mix(in srgb, var(--ins-ink) 35%, transparent);
+}
+.chg-id {
+  font-family: var(--mono); font-size: 12px; font-weight: 500;
+  flex: none; min-width: 84px; color: var(--c-article);
+}
+.chg-title {
+  font-size: 13.5px; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.chg-delta {
+  margin-left: auto; flex: none;
+  font-family: var(--mono); font-size: 11px;
+}
+.chg-delta ins { color: var(--ins-ink); background: none; text-decoration: none; }
+.chg-delta del { color: var(--del-ink); background: none; text-decoration: none; }
+.chg-caret {
+  flex: none; width: 13px; height: 13px;
+  fill: none; stroke: var(--ink-3); stroke-width: 2; stroke-linecap: round;
+  transition: transform .16s;
+}
+.chg.is-open .chg-caret { transform: rotate(90deg); }
+.chg-body { display: none; padding: 2px 4px 22px 6px; }
+.chg.is-open .chg-body { display: block; }
+.chg-note { font-size: 12px; color: var(--ink-3); margin: 10px 0 0; font-style: italic; }
+.chg-preview {
+  font-family: var(--serif); font-size: 15px; line-height: 1.6;
+  color: var(--ink-2); margin: 10px 0 0;
+}
+.chg-actions { margin-top: 14px; }
+
+/* the redline */
+.redline {
+  font-family: var(--serif); font-size: 15px; line-height: 1.75;
+  border: 1px solid var(--rule); border-radius: 10px;
+  background: var(--panel);
+  padding: 14px 16px;
+}
+.redline ins {
+  background: var(--ins-bg); color: var(--ins-ink);
+  text-decoration: none; border-radius: 3px;
+  padding: 1px 2px; box-decoration-break: clone;
+}
+.redline ins::before { content: "+ "; font-family: var(--mono); font-size: 11px; opacity: .8; }
+.redline del {
+  background: var(--del-bg); color: var(--del-ink);
+  text-decoration: line-through; text-decoration-thickness: 1px;
+  border-radius: 3px; padding: 1px 2px; box-decoration-break: clone;
+}
+.redline del::before { content: "− "; font-family: var(--mono); font-size: 11px; opacity: .8; text-decoration: none; }
+.redline span { color: var(--ink-2); }
+
+.chg-why {
+  margin-top: 16px; padding: 12px 14px;
+  border-left: 2px solid var(--c-recital);
+  background: var(--c-recital-bg);
+  border-radius: 0 8px 8px 0;
+}
+.chg-why h4 {
+  margin: 0 0 6px;
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--c-recital);
+}
+.chg-rec {
+  font-family: var(--serif); font-size: 14px; line-height: 1.55;
+  color: var(--ink-2); margin: 0 0 8px;
+}
+.chg-rec:last-child { margin-bottom: 0; }
+.chg-rec b { font-family: var(--sans); font-size: 11.5px; color: var(--ink); }
+
+.fineprint {
+  font-size: 11.5px; line-height: 1.6; color: var(--ink-3);
+  border-top: 1px solid var(--rule);
+  margin-top: 40px; padding-top: 14px;
+}
+.fineprint a { color: var(--accent); }
+
+/* connections tabs — so backlinks are never below the fold */
+.conn-tabs {
+  display: flex; gap: 2px;
+  border-bottom: 1px solid var(--rule);
+  margin: -14px -12px 12px; padding: 0 12px;
+  position: sticky; top: 0; z-index: 2;
+  background: var(--paper);
+}
+.conn-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: 0; cursor: pointer;
+  padding: 11px 4px 9px; margin-bottom: -1px;
+  font-size: 12px; font-weight: 500; color: var(--ink-3);
+  border-bottom: 2px solid transparent;
+}
+.conn-tab:hover { color: var(--ink); }
+.conn-tab.is-on { color: var(--ink); border-bottom-color: var(--accent); }
+.conn-n {
+  font-family: var(--mono); font-size: 10.5px;
+  background: var(--sunk); border-radius: 999px; padding: 1px 6px;
+}
+.conn-tab.is-on .conn-n { background: var(--c-article-bg); color: var(--accent); }

@@ -14,6 +14,7 @@
   var SEARCH = [];
 
   var TYPES = ["article", "recital", "annex", "definition"];
+  var ALL_TYPES = { article: true, recital: true, annex: true, definition: true };
   var TYPE_LABEL = { article: "Articles", recital: "Recitals", annex: "Annexes", definition: "Terms" };
   var KIND_LABEL = {
     cites: "cites", annex: "annex", uses: "defined term",
@@ -54,7 +55,7 @@
         el.doc.innerHTML =
           '<div class="boot"><p><strong>The Act could not be loaded.</strong></p>' +
           '<p>' + esc(String(err.message || err)) + '</p>' +
-          '<p>Run <code>python3 build/parse.py</code> to regenerate <code>data/aiact.json</code>.</p></div>';
+          '<p>Run <code>python3 build/build.py</code> to regenerate <code>data/aiact.json</code>.</p></div>';
       });
   });
 
@@ -133,6 +134,7 @@
     if (!h) return { kind: "home" };
     var bits = h.split("/");
     if (bits[0] === "graph") return { kind: "graph" };
+    if (bits[0] === "changes") return { kind: "changes", focus: bits[1] || null };
     var pref = ROUTE_TO_ID[bits[0]];
     if (!pref || !bits[1]) return { kind: "home" };
     var id = pref + decodeURIComponent(bits[1]);
@@ -158,7 +160,13 @@
     state.route = r;
     closeRails();
 
-    if (r.kind === "home") {
+    if (r.kind === "changes") {
+      renderChanges(r.focus);
+      renderGraphFor(null);
+      el.conn.innerHTML = "";
+      markToc(null);
+      document.title = "What changed in 2026 — AI Act Browser";
+    } else if (r.kind === "home") {
       renderHome();
       renderGraphFor(null);
       el.conn.innerHTML = "";
@@ -219,7 +227,7 @@
             seenSection = a.sectionLabel;
             h += '<div class="sec-name">' + esc(a.sectionLabel) + ' · ' + esc(a.sectionTitle || "") + "</div>";
           }
-          h += tocLink(a.id, "Art. " + a.num, a.title);
+          h += tocLink(a.id, "Art. " + artKey(a), a.title, a.status);
         });
         h += "</div></div>";
       });
@@ -247,10 +255,13 @@
     });
   }
 
-  function tocLink(id, num, name) {
+  function tocLink(id, num, name, status) {
     return '<button class="tl" type="button" data-id="' + id + '">' +
       '<span class="tl-num">' + esc(num) + '</span>' +
-      '<span class="tl-name">' + esc(name || "") + "</span></button>";
+      '<span class="tl-name">' + esc(name || "") + "</span>" +
+      (status ? '<span class="tl-chg" data-status="' + status + '" title="' +
+        esc(STATUS_LABEL[status]) + '">' + (status === "inserted" ? "new" : "amd") + "</span>" : "") +
+      "</button>";
   }
 
   function markToc(id) {
@@ -271,22 +282,13 @@
     var m = DATA.meta, c = m.counts;
     var h = '<div class="home-hero">' +
       '<p class="home-eyebrow">' + esc(m.source) + "</p>" +
-      "<h1>The AI Act, with its recitals attached.</h1>" +
-      "<p>Every article carries the recitals that explain it, the provisions it cites, " +
-      "the provisions that cite back, and the defined terms it turns on — with a graph " +
-      "big enough to actually navigate.</p></div>";
+      "<h1>The AI Act, with its recitals attached.</h1></div>";
 
-    h += '<div class="stats">';
-    [["article", c.articles, "Articles"], ["recital", c.recitals, "Recitals"],
-     ["annex", c.annexes, "Annexes"], ["definition", c.definitions, "Defined terms"]]
-      .forEach(function (s) {
-        h += '<button class="stat" type="button" data-type="' + s[0] + '" data-tab="' +
-          (s[0] === "article" ? "act" : s[0] === "definition" ? "defs" : s[0] + "s") + '">' +
-          '<div class="stat-n">' + s[1] + "</div><div class=\"stat-k\">" + s[2] + "</div></button>";
-      });
-    h += '<button class="stat" type="button" data-open="graph">' +
-      '<div class="stat-n">' + c.edges + '</div><div class="stat-k">Connections</div></button>';
-    h += "</div>";
+    h += '<a class="banner" href="#/changes">' +
+      '<span class="banner-tag">In force ' + esc(m.inForce) + "</span>" +
+      "<span class="+'"banner-text"'+">Amended by the " + esc(m.amendedBy.short) + ": <b>" +
+      c.changed + " provisions</b> added or rewritten.</span>" +
+      '<span class="banner-go">See what changed →</span></a>';
 
     h += '<div class="block"><div class="block-head"><h2>Chapters</h2></div><div class="chapgrid">';
     DATA.chapters.forEach(function (ch) {
@@ -303,16 +305,164 @@
     el.doc.querySelectorAll("[data-goto]").forEach(function (b) {
       b.addEventListener("click", function () { if (b.dataset.goto) go(routeOf(b.dataset.goto)); });
     });
-    el.doc.querySelectorAll(".stat[data-tab]").forEach(function (b) {
+  }
+
+  /* ── what changed in 2026 ─────────────────────────────────── */
+
+  var CHANGES = null;          // lazily fetched; it is only needed on this page
+  var changeFilter = "all";
+
+  function renderChanges(focus) {
+    if (CHANGES) return paintChanges(focus);
+
+    el.doc.innerHTML = '<div class="boot"><div class="boot-bar"><span></span></div>' +
+      "<p>Loading the amendments…</p></div>";
+
+    fetch("/data/changes.json")
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (d) {
+        CHANGES = d;
+        d.recitals.forEach(function (r) { if (!N[r.id]) N[r.id] = r; });
+        paintChanges(focus);
+      })
+      .catch(function (err) {
+        el.doc.innerHTML = '<div class="boot"><p><strong>The amendments could not be loaded.</strong></p>' +
+          "<p>" + esc(String(err.message || err)) + "</p>" +
+          "<p>Run <code>python3 build/build.py</code> to regenerate <code>data/changes.json</code>.</p></div>";
+      });
+  }
+
+  function paintChanges(focus) {
+    var m = CHANGES.meta, c = m.counts, a = m.amendedBy;
+
+    var h = '<div class="home-hero">' +
+      '<p class="home-eyebrow">' + esc(a.title) + " · applies from " + esc(m.inForce) + "</p>" +
+      "<h1>What the Digital Omnibus changed.</h1>" +
+      "<p>" + esc(a.title) + " — the " + esc(a.short) + " of " + esc(a.date) +
+      " — rewrote " + c.amended + " provisions of the AI Act and added " + c.inserted +
+      ". Every change below is EUR-Lex's own annotation of the consolidated text, " +
+      "shown against the Act as first published.</p></div>";
+
+    h += '<div class="stats">' +
+      statCell(c.inserted, "Added", "inserted") +
+      statCell(c.amended, "Rewritten", "amended") +
+      statCell(c.articles, "Articles touched", "") +
+      statCell(c.recitals, "Omnibus recitals", "") +
+      "</div>";
+
+    h += '<div class="chips" role="group" aria-label="Filter changes">';
+    [["all", "Everything", c.total], ["inserted", "Added", c.inserted],
+     ["amended", "Rewritten", c.amended], ["article", "Articles", c.articles],
+     ["annex", "Annexes", c.annexes], ["definition", "Terms", c.definitions]]
+      .forEach(function (f) {
+        if (!f[2]) return;
+        h += '<button class="chip' + (changeFilter === f[0] ? " is-on" : "") +
+          '" type="button" data-filter="' + f[0] + '" aria-pressed="' +
+          (changeFilter === f[0] ? "true" : "false") + '">' +
+          esc(f[1]) + '<span class="chip-n">' + f[2] + "</span></button>";
+      });
+    h += "</div>";
+
+    var items = CHANGES.items.filter(matchFilter);
+    h += '<div class="block"><div class="block-head"><h2>Provisions</h2>' +
+      '<span class="block-count">' + items.length + "</span>" +
+      '<span class="block-note">added first, then rewritten · click to expand</span></div>';
+
+    h += '<div class="chg-list">' + items.map(changeCard).join("") + "</div></div>";
+
+    h += '<p class="fineprint">Change annotations come from the EUR-Lex consolidated text ' +
+      '(▼M1 markers), not from comparing the two documents — the two exports use different ' +
+      'converters, so a raw comparison reports punctuation as amendment. The word-level ' +
+      'redlines below are computed against ' +
+      '<a href="' + esc(m.baseUrl) + '" target="_blank" rel="noopener">the Act as published in 2024</a>. ' +
+      'Only the Official Journal text is authentic.</p>';
+
+    el.doc.innerHTML = h;
+
+    el.doc.querySelectorAll(".chip").forEach(function (b) {
       b.addEventListener("click", function () {
-        var t = document.querySelector('.rail-tab[data-tab="' + b.dataset.tab + '"]');
-        if (t) t.click();
-        document.body.classList.add("show-toc");
+        changeFilter = b.dataset.filter;
+        paintChanges(null);
       });
     });
-    var og = el.doc.querySelector('[data-open="graph"]');
-    if (og) og.addEventListener("click", function () { go("#/graph"); });
+    el.doc.querySelectorAll(".chg-head").forEach(function (b) {
+      b.addEventListener("click", function () { b.parentNode.classList.toggle("is-open"); });
+    });
+    el.doc.querySelectorAll("[data-open]").forEach(function (b) {
+      b.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        go(routeOf(b.dataset.open));
+      });
+    });
+
+    if (focus) {
+      var card = el.doc.querySelector('.chg[data-id="' + cssEsc(focus) + '"]');
+      if (card) {
+        card.classList.add("is-open", "is-focus");
+        setTimeout(function () { card.scrollIntoView({ block: "center", behavior: "smooth" }); }, 40);
+      }
+    }
   }
+
+  function matchFilter(i) {
+    if (changeFilter === "all") return true;
+    if (changeFilter === "inserted" || changeFilter === "amended") return i.status === changeFilter;
+    return i.kind === changeFilter;
+  }
+
+  function statCell(n, k, status) {
+    return '<div class="stat" ' + (status ? 'data-status="' + status + '"' : "") + ">" +
+      '<div class="stat-n">' + n + '</div><div class="stat-k">' + esc(k) + "</div></div>";
+  }
+
+  function changeCard(i) {
+    var h = '<article class="chg" data-id="' + esc(i.id) + '" data-status="' + i.status + '">' +
+      '<button class="chg-head" type="button">' +
+      '<span class="chg-badge" data-status="' + i.status + '">' +
+        (i.status === "inserted" ? "added" : i.status === "removed" ? "removed" : "rewritten") + "</span>" +
+      '<span class="chg-id">' + esc(i.label) + "</span>" +
+      '<span class="chg-title">' + esc(i.title) + "</span>";
+
+    if (i.stats) {
+      h += '<span class="chg-delta"><ins>+' + i.stats.added + "</ins> <del>−" +
+        i.stats.removed + "</del></span>";
+    }
+    h += '<svg class="chg-caret" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>';
+
+    h += '<div class="chg-body">';
+    if (i.status === "inserted") {
+      h += '<p class="chg-note">This provision did not exist in the 2024 Act.</p>' +
+        '<p class="chg-preview">' + esc(i.preview) + "…</p>";
+    } else if (i.status === "removed") {
+      h += '<p class="chg-note">This provision was removed from the Act.</p>';
+    } else if (i.diff) {
+      h += '<div class="redline">' + i.diff.map(function (op) {
+        var t = esc(op[1]);
+        if (op[0] === 1) return "<ins>" + t + "</ins>";
+        if (op[0] === -1) return "<del>" + t + "</del>";
+        return "<span>" + t + "</span>";
+      }).join("") + "</div>" +
+        '<p class="chg-note">Unchanged runs are shortened with …</p>';
+    }
+
+    if (i.recitals && i.recitals.length) {
+      h += '<div class="chg-why"><h4>Why</h4>' + i.recitals.map(function (r) {
+        var rec = N[r.id];
+        return '<p class="chg-rec"><b>Omnibus recital ' + esc(String(rec ? rec.num : "")) +
+          "</b> " + esc(rec ? lede(rec.text, 260) : "") + "</p>";
+      }).join("") + "</div>";
+    }
+
+    h += '<div class="chg-actions"><button class="btn" type="button" data-open="' +
+      esc(i.id) + '">Open ' + esc(i.label) + " →</button></div>";
+    h += "</div></article>";
+    return h;
+  }
+
+  function cssEsc(s) { return String(s).replace(/["\\]/g, "\\$&"); }
 
   function renderNode(n, para) {
     var h = "";
@@ -329,6 +479,13 @@
     }
 
     h += '<span class="kicker" data-type="' + n.type + '">' + esc(kickerText(n)) + "</span>";
+    if (n.status) {
+      h += '<a class="kicker kicker-chg" data-status="' + n.status + '" href="#/changes/' +
+        esc(n.id) + '">' + esc(STATUS_LABEL[n.status]) + " · see the change</a>";
+    }
+    if (n.amending) {
+      h += '<span class="kicker kicker-chg" data-status="amended">From the amending Regulation</span>';
+    }
 
     if (n.type === "definition") {
       h += '<h1 class="doc-title">‘' + esc(n.term) + "’</h1>" +
@@ -337,18 +494,6 @@
       h += '<h1 class="doc-title">' + esc(n.title || n.label) + "</h1>";
       if (n.type !== "recital") h += '<p class="doc-num">' + esc(n.label) + "</p>";
     }
-
-    /* meta strip */
-    var outs = OUT[n.id], ins = IN[n.id];
-    h += '<div class="meta">' +
-      cell("Words", n.words) +
-      cell("Outgoing", outs.length) +
-      cell("Backlinks", ins.length);
-    if (n.type === "article") {
-      var recs = recitalsFor(n.id);
-      h += cell("Recitals", recs.length);
-    }
-    h += "</div>";
 
     /* the text */
     h += '<div class="lawtext" id="lawtext">' + n.html + "</div>";
@@ -377,15 +522,12 @@
   }
 
   function kickerText(n) {
-    if (n.type === "article") return "Article " + n.num;
+    if (n.type === "article") return "Article " + artKey(n);
     if (n.type === "recital") return "Recital " + n.num;
     if (n.type === "annex") return "Annex " + n.roman;
     return "Defined term";
   }
 
-  function cell(k, v) {
-    return '<div class="meta-cell"><div class="meta-k">' + k + '</div><div class="meta-v">' + v + "</div></div>";
-  }
 
   function recitalsFor(id) {
     return IN[id]
@@ -466,26 +608,48 @@
 
   /* connections rail ------------------------------------------ */
 
+  var connTab = "out";
+
+  // Outgoing and backlinks are tabbed rather than stacked: an article with 15
+  // outgoing links would otherwise push its backlinks off the bottom of the rail.
   function renderConnections(n) {
     var outs = OUT[n.id].slice().sort(edgeSort);
     var ins = IN[n.id].slice().sort(edgeSort);
 
-    var h = "";
-    h += '<section class="block"><div class="block-head"><h2>Outgoing</h2>' +
-      '<span class="block-count">' + outs.length + "</span></div>";
-    h += outs.length ? '<div class="links">' + outs.map(function (e) {
-      return linkRow(N[e.t], KIND_LABEL[e.k] || e.k);
-    }).join("") + "</div>" : '<p class="empty">Cites nothing else.</p>';
-    h += "</section>";
+    var h = '<div class="conn-tabs" role="tablist">' +
+      '<button class="conn-tab' + (connTab === "out" ? " is-on" : "") + '" data-conn="out" role="tab"' +
+        ' aria-selected="' + (connTab === "out") + '">Outgoing<span class="conn-n">' + outs.length + "</span></button>" +
+      '<button class="conn-tab' + (connTab === "in" ? " is-on" : "") + '" data-conn="in" role="tab"' +
+        ' aria-selected="' + (connTab === "in") + '">Backlinks<span class="conn-n">' + ins.length + "</span></button>" +
+      "</div>";
 
-    h += '<section class="block"><div class="block-head"><h2>Backlinks</h2>' +
-      '<span class="block-count">' + ins.length + "</span></div>";
-    h += ins.length ? '<div class="links">' + ins.map(function (e) {
-      return linkRow(N[e.s], KIND_LABEL[e.k] || e.k);
-    }).join("") + "</div>" : '<p class="empty">Nothing points here.</p>';
-    h += "</section>";
+    h += '<div class="conn-pane" data-pane="out"' + (connTab === "out" ? "" : " hidden") + ">" +
+      (outs.length ? '<div class="links">' + outs.map(function (e) {
+        return linkRow(N[e.t], KIND_LABEL[e.k] || e.k);
+      }).join("") + "</div>" : '<p class="empty">Cites nothing else.</p>') + "</div>";
+
+    h += '<div class="conn-pane" data-pane="in"' + (connTab === "in" ? "" : " hidden") + ">" +
+      (ins.length ? '<div class="links">' + ins.map(function (e) {
+        return linkRow(N[e.s], KIND_LABEL[e.k] || e.k);
+      }).join("") + "</div>" : '<p class="empty">Nothing points here.</p>') + "</div>";
 
     el.conn.innerHTML = h;
+
+    el.conn.querySelectorAll(".conn-tab").forEach(function (b) {
+      b.addEventListener("click", function () {
+        connTab = b.dataset.conn;
+        el.conn.querySelectorAll(".conn-tab").forEach(function (x) {
+          var on = x.dataset.conn === connTab;
+          x.classList.toggle("is-on", on);
+          x.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        el.conn.querySelectorAll(".conn-pane").forEach(function (p) {
+          p.hidden = p.dataset.pane !== connTab;
+        });
+        el.conn.scrollTop = 0;
+      });
+    });
+
     wireLinks(el.conn);
     el.conn.scrollTop = 0;
   }
@@ -498,7 +662,8 @@
     var d = oa - ob;
     if (d) return d;
     var na = N[a.t] || N[a.s], nb = N[b.t] || N[b.s];
-    return (na && nb) ? na.num - nb.num : 0;
+    if (!na || !nb) return 0;
+    return (na.num - nb.num) || String(na.id).localeCompare(String(nb.id));
   }
 
   function linkRow(n, kind) {
@@ -510,12 +675,22 @@
       "</button>";
   }
 
+  // Articles inserted in 2026 are lettered — 4a, 60a, 75a…75d — so the key,
+  // not the number, is what identifies and labels an article.
+  function artKey(n) { return n.key || String(n.num); }
+
   function shortLabel(n) {
-    if (n.type === "article") return "Art. " + n.num;
-    if (n.type === "recital") return "Rec. " + n.num;
+    if (n.type === "article") return "Art. " + artKey(n);
+    if (n.type === "recital") return (n.amending ? "Omni. " : "Rec. ") + n.num;
     if (n.type === "annex") return "Annex " + n.roman;
     return "Term " + n.num;
   }
+
+  var STATUS_LABEL = {
+    inserted: "New in 2026",
+    amended: "Amended in 2026",
+    removed: "Removed in 2026"
+  };
 
   function wireLinks(root) {
     root.querySelectorAll(".link").forEach(function (b) {
@@ -694,7 +869,7 @@
       var sample = wholeGraph(state.show);
       mini.setFocus(null).setData(sample.nodes, sample.edges);
       el.gempty.hidden = sample.nodes.length > 0;
-      updateLegend(sample.nodes);
+      updateLegend(wholeGraph(ALL_TYPES).nodes);
       return;
     }
     title.textContent = "Neighbourhood";
@@ -702,7 +877,9 @@
     var g = neighbourhood(id, state.depth, state.show);
     mini.setFocus(id).setData(g.nodes, g.edges);
     el.gempty.hidden = g.nodes.length > 1;
-    updateLegend(g.nodes);
+    // Count what is *there*, not what is currently drawn — a legend chip that
+    // reads 0 because it is switched off tells the reader nothing.
+    updateLegend(neighbourhood(id, state.depth, ALL_TYPES).nodes);
   }
 
   var COLLECTION = {
