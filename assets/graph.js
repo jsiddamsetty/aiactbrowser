@@ -10,6 +10,9 @@
 
   var REDUCED = global.matchMedia &&
     global.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Fingers are blunter than a cursor, so tap targets grow to match.
+  var COARSE = global.matchMedia &&
+    global.matchMedia("(pointer: coarse)").matches;
 
   function Graph(canvas, opts) {
     opts = opts || {};
@@ -224,7 +227,7 @@
     for (var i = 0; i < this.nodes.length; i++) {
       var n = this.nodes[i];
       var d = Math.hypot(n.x - p.x, n.y - p.y);
-      var hit = (n.r + 7) / Math.max(this.scale, 0.4);
+      var hit = (n.r + (COARSE ? 16 : 7)) / Math.max(this.scale, 0.4);
       if (d < hit && d < bd) { bd = d; best = n; }
     }
     return best;
@@ -351,6 +354,13 @@
       else if (this.scale > 0.6) budget = 40;
       else budget = 16;
 
+      // A phone-sized canvas has a fraction of the room a desktop one does, so
+      // the same budget would crowd it. Scale by area, not by breakpoint.
+      if (budget !== Infinity) {
+        budget = Math.max(6, Math.round(budget *
+          Math.min(1, (this.w * this.h) / (900 * 600))));
+      }
+
       c.textAlign = "center";
       c.textBaseline = "top";
 
@@ -412,8 +422,55 @@
       return { x: ev.clientX - r.left, y: ev.clientY - r.top };
     }
 
+    // Active touch points, so two fingers can pinch-zoom the graph. Touch has
+    // no wheel event, and without this a dense graph cannot be zoomed at all.
+    var pointers = new Map();
+
+    function twoPoints() {
+      var it = pointers.values();
+      return [it.next().value, it.next().value];
+    }
+
+    function beginPinch() {
+      var pts = twoPoints();
+      var dx = pts[1].x - pts[0].x, dy = pts[1].y - pts[0].y;
+      self.drag = null;
+      self.panning = null;
+      self.userMoved = true;
+      self.pinch = {
+        d: Math.hypot(dx, dy) || 1,
+        mx: (pts[0].x + pts[1].x) / 2,
+        my: (pts[0].y + pts[1].y) / 2,
+        scale: self.scale, tx: self.tx, ty: self.ty
+      };
+    }
+
+    function movePinch() {
+      var g = self.pinch;
+      if (!g || pointers.size < 2) return;
+      var pts = twoPoints();
+      var dx = pts[1].x - pts[0].x, dy = pts[1].y - pts[0].y;
+      var d = Math.hypot(dx, dy) || 1;
+      var mx = (pts[0].x + pts[1].x) / 2, my = (pts[0].y + pts[1].y) / 2;
+
+      var next = Math.max(0.08, Math.min(g.scale * (d / g.d), 6));
+      var f = next / g.scale;
+      // Zoom about the gesture's midpoint, and let the midpoint drift pan.
+      self.scale = next;
+      self.tx = mx - (g.mx - g.tx) * f;
+      self.ty = my - (g.my - g.ty) * f;
+      self.dirty = true;
+      self.draw();
+    }
+
     cv.addEventListener("pointerdown", function (ev) {
-      cv.setPointerCapture(ev.pointerId);
+      // Capture can throw if the pointer is already gone; losing it only costs
+      // us tracking outside the canvas, so it must never break the gesture.
+      try { cv.setPointerCapture(ev.pointerId); } catch (e) {}
+      pointers.set(ev.pointerId, pos(ev));
+      if (pointers.size === 2) { beginPinch(); return; }
+      if (pointers.size > 2) return;
+
       var p = pos(ev);
       var n = self.nodeAt(p.x, p.y);
       if (n) {
@@ -430,6 +487,8 @@
 
     cv.addEventListener("pointermove", function (ev) {
       var p = pos(ev);
+      if (pointers.has(ev.pointerId)) pointers.set(ev.pointerId, p);
+      if (pointers.size >= 2) { movePinch(); return; }
 
       if (self.drag) {
         var w = self.toWorld(p.x, p.y);
@@ -460,6 +519,8 @@
     });
 
     function release(ev) {
+      if (ev) pointers.delete(ev.pointerId);
+      if (pointers.size < 2) self.pinch = null;
       if (self.drag) {
         if (self.drag.moved < 3) self.onSelect(self.drag.node);
         self.drag = null;
@@ -467,9 +528,11 @@
         self.run();
       }
       self.panning = null;
-      if (ev && cv.hasPointerCapture && cv.hasPointerCapture(ev.pointerId)) {
-        cv.releasePointerCapture(ev.pointerId);
-      }
+      try {
+        if (ev && cv.hasPointerCapture && cv.hasPointerCapture(ev.pointerId)) {
+          cv.releasePointerCapture(ev.pointerId);
+        }
+      } catch (e) {}
     }
     cv.addEventListener("pointerup", release);
     cv.addEventListener("pointercancel", release);

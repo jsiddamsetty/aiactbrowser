@@ -158,6 +158,9 @@ of EUR-Lex source documents and the parsers out of the deployment. Pushing to
 - Defined terms are leaves in the hop graph, never routes: `'provider'` is used
   by 161 provisions, so hopping *through* it would drag in most of the Act and
   call it a neighbourhood
+- On touch, the graph pans with one finger and zooms with two; the expanded
+  view keeps its scope, hop and type controls on a wrapped bar rather than
+  dropping them, and the label budget scales with the canvas area
 - **Outgoing and backlinks are tabbed** under the graph, so backlinks are never
   pushed below the fold by a long citation list
 - Hovering a defined term previews its definition; clicking opens it
