@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Act Browser — Regulation (EU) 2024/1689</title>
+<meta name="description" content="Read the EU AI Act with its recitals, cross-references, backlinks and a full-size citation graph.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%231A46B8'/><circle cx='16' cy='9' r='3' fill='%23fff'/><circle cx='9' cy='21' r='3' fill='%23fff'/><circle cx='23' cy='21' r='3' fill='%23fff'/></svg>">
+</head>
+<body>
+
+<a class="skip" href="#reader">Skip to text</a>
+
+<header class="topbar">
+  <button id="btn-toc" class="icon-btn rail-toggle" type="button" aria-label="Show contents" aria-expanded="false">
+    <svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+  </button>
+
+  <a class="brand" href="#/" aria-label="AI Act Browser home">
+    <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+      <line x1="12" y1="6" x2="6" y2="18"/><line x1="12" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="18"/>
+      <circle cx="12" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/>
+    </svg>
+    <span class="brand-text">
+      <b>AI Act Browser</b>
+      <i>Regulation (EU) 2024/1689</i>
+    </span>
+  </a>
+
+  <div class="search" role="search">
+    <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/></svg>
+    <input id="q" type="search" autocomplete="off" spellcheck="false"
+           placeholder="Search articles, recitals, annexes, definitions…"
+           aria-label="Search the Act" aria-expanded="false" aria-controls="results">
+    <kbd class="hint">/</kbd>
+    <div id="results" class="results" role="listbox" hidden></div>
+  </div>
+
+  <div class="topbar-actions">
+    <button id="btn-links" class="icon-btn links-toggle" type="button" aria-label="Show connections" aria-expanded="false">
+      <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
+    </button>
+    <button id="btn-graph" class="btn" type="button" title="Open the full citation graph">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="7" r="2.5"/><circle cx="12" cy="17" r="2.5"/><line x1="6" y1="6" x2="18" y2="7"/><line x1="6" y1="6" x2="12" y2="17"/><line x1="18" y1="7" x2="12" y2="17"/></svg>
+      <span>Graph</span>
+    </button>
+    <button id="btn-theme" class="btn btn-icon" type="button" title="Switch theme" aria-label="Switch theme">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14a8 8 0 1 1-10-10 8.5 8.5 0 0 0 10 10Z"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="scrim" id="scrim" hidden></div>
+
+<div class="layout">
+
+  <!-- ── contents ─────────────────────────────────────────────── -->
+  <nav class="rail rail-left" id="toc-rail" aria-label="Contents">
+    <div class="rail-tabs" role="tablist">
+      <button class="rail-tab is-on" data-tab="act"  role="tab">Act</button>
+      <button class="rail-tab" data-tab="recitals"   role="tab">Recitals</button>
+      <button class="rail-tab" data-tab="annexes"    role="tab">Annexes</button>
+      <button class="rail-tab" data-tab="defs"       role="tab">Terms</button>
+    </div>
+    <div class="rail-body" id="toc"></div>
+  </nav>
+
+  <!-- ── reader ───────────────────────────────────────────────── -->
+  <main class="reader" id="reader" tabindex="-1">
+    <div id="doc" class="doc">
+      <div class="boot">
+        <div class="boot-bar"><span></span></div>
+        <p>Loading the Act…</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- ── graph + connections ──────────────────────────────────── -->
+  <aside class="rail rail-right" id="graph-rail" aria-label="Graph and connections">
+    <section class="gpanel">
+      <div class="gpanel-head">
+        <h2 id="gtitle">The whole Act</h2>
+        <div class="gpanel-tools">
+          <div class="seg" id="depth" role="group" aria-label="Graph depth">
+            <button class="seg-btn is-on" data-depth="1" type="button">1 hop</button>
+            <button class="seg-btn" data-depth="2" type="button">2 hops</button>
+          </div>
+          <button id="btn-expand" class="icon-btn" type="button" title="Expand graph" aria-label="Expand graph">
+            <svg viewBox="0 0 24 24"><path d="M9 3H3v6M15 21h6v-6M3 3l7 7M21 21l-7-7"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="gcanvas-wrap">
+        <canvas id="gmini"></canvas>
+        <p class="gempty" id="gempty" hidden>No connections to show.</p>
+      </div>
+      <div class="legend" id="legend"></div>
+    </section>
+
+    <section class="conn" id="conn"></section>
+  </aside>
+</div>
+
+<!-- ── full-screen graph ──────────────────────────────────────── -->
+<div class="overlay" id="overlay" hidden>
+  <div class="overlay-bar">
+    <div class="overlay-title">
+      <h2>Citation graph</h2>
+      <p id="ov-sub">The whole Act — every article, recital, annex and defined term.</p>
+    </div>
+    <div class="overlay-tools" id="ov-filters"></div>
+    <button id="btn-close" class="icon-btn" type="button" title="Close graph" aria-label="Close graph">
+      <svg viewBox="0 0 24 24"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
+    </button>
+  </div>
+  <canvas id="gfull"></canvas>
+  <div class="ov-hint"><kbd>drag</kbd> pan · <kbd>scroll</kbd> zoom · <kbd>click</kbd> open · <kbd>esc</kbd> close</div>
+</div>
+
+<div class="tip" id="tip" hidden></div>
+
+<script src="/assets/graph.js"></script>
+<script src="/assets/app.js"></script>
+</body>
+</html>

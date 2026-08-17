@@ -1,0 +1,6 @@
+# The 1.2 MB Official Journal export and the parser are build-time inputs only —
+# the deployed site needs data/aiact.json, not the source it came from.
+build/
+*.pyc
+__pycache__/
+.DS_Store
