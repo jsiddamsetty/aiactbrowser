@@ -296,10 +296,11 @@
     c.globalAlpha = 1;
 
     /* nodes */
+    var focusMark = null;
     for (var k = 0; k < this.nodes.length; k++) {
       var n = this.nodes[k];
+      if (n.id === this.focusId) { focusMark = n; continue; }
       var dim = near && !near[n.id];
-      var isFocus = n.id === this.focusId;
 
       c.globalAlpha = dim ? (hard ? 0.2 : 0.6) : 1;
       c.beginPath();
@@ -311,17 +312,34 @@
       c.lineWidth = 1.5 / this.scale;
       c.strokeStyle = panel;
       c.stroke();
-
-      if (isFocus) {
-        c.globalAlpha = 1;
-        c.beginPath();
-        c.arc(n.x, n.y, n.r + 4.5 / this.scale + 2, 0, 6.2832);
-        c.strokeStyle = col[n.type] || ink;
-        c.lineWidth = 2 / this.scale;
-        c.stroke();
-      }
     }
     c.globalAlpha = 1;
+
+    // The focus is drawn last and larger, with a cut-out halo, so it stays
+    // findable in a crowd instead of being one dot among hundreds.
+    if (focusMark) {
+      var fr = Math.max(focusMark.r * 1.5, 9 / this.scale);
+      c.beginPath();
+      c.arc(focusMark.x, focusMark.y, fr + 7 / this.scale, 0, 6.2832);
+      c.fillStyle = panel;
+      c.globalAlpha = 0.85;
+      c.fill();
+      c.globalAlpha = 1;
+
+      c.beginPath();
+      c.arc(focusMark.x, focusMark.y, fr, 0, 6.2832);
+      c.fillStyle = col[focusMark.type] || inkMuted;
+      c.fill();
+      c.lineWidth = 2 / this.scale;
+      c.strokeStyle = panel;
+      c.stroke();
+
+      c.beginPath();
+      c.arc(focusMark.x, focusMark.y, fr + 5 / this.scale, 0, 6.2832);
+      c.strokeStyle = col[focusMark.type] || ink;
+      c.lineWidth = 2 / this.scale;
+      c.stroke();
+    }
 
     /* labels — a budget, spent on the best-connected nodes first, so a dense
        view never turns into overlapping text */
@@ -356,7 +374,10 @@
         var txt = q.label;
         var tw = c.measureText(txt).width;
         var padx = 3 / this.scale;
-        var bx = q.x - tw / 2 - padx, by = q.y + q.r + 3 / this.scale;
+        // Clear the focus halo, which is drawn wider than the node itself.
+        var below = isF ? Math.max(q.r * 1.5, 9 / this.scale) + 9 / this.scale
+                        : q.r + 3 / this.scale;
+        var bx = q.x - tw / 2 - padx, by = q.y + below;
         var bw2 = tw + padx * 2, bh2 = size * 1.25;
 
         var clash = false;

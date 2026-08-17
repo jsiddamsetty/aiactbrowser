@@ -1014,11 +1014,13 @@
 
   function openOverlay(focus) {
     var wasOpen = !el.overlay.hidden;
-    state.ovFocus = focus || null;
-    // Expanding from a provision keeps you on that provision; the Graph button
-    // in the top bar opens the whole Act.
+    // Expanding from a provision opens on that provision; the top-bar Graph
+    // button opens the whole Act. Either way, if a provision is open behind the
+    // overlay it stays the focus target, so the Neighbourhood toggle works
+    // instead of sitting disabled.
+    state.ovFocus = focus || (state.route && state.route.id) || null;
     state.ovScope = focus ? "focus" : "all";
-    state.ovDepth = focus ? state.depth : state.ovDepth || 1;
+    state.ovDepth = focus ? (state.depth || 1) : (state.ovDepth || 1);
     syncOvDepth();
     if (wasOpen) { paintOverlay(true); return; }
 
@@ -1211,11 +1213,17 @@
       if (ev.key === "Escape" && el.overlay.hidden) closeRails();
     });
 
-    document.querySelectorAll(".seg-btn").forEach(function (b) {
+    // Scoped to the rail's own group: a bare ".seg-btn" also matches the
+    // overlay's scope and hop controls, whose buttons carry no data-depth.
+    $("#depth").querySelectorAll(".seg-btn").forEach(function (b) {
       b.addEventListener("click", function () {
-        document.querySelectorAll(".seg-btn").forEach(function (x) { x.classList.remove("is-on"); });
+        var d = +b.dataset.depth;
+        if (!d) return;
+        $("#depth").querySelectorAll(".seg-btn").forEach(function (x) {
+          x.classList.remove("is-on");
+        });
         b.classList.add("is-on");
-        state.depth = +b.dataset.depth;
+        state.depth = d;
         renderGraphFor(state.route && state.route.id);
       });
     });
