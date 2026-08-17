@@ -25,7 +25,10 @@
     route: null,
     depth: 1,
     show: { article: true, recital: true, annex: true, definition: true },
-    ovShow: { article: true, recital: true, annex: true, definition: true }
+    ovShow: { article: true, recital: true, annex: true, definition: true },
+    ovFocus: null,          // provision the expanded graph is centred on
+    ovScope: "all",         // "focus" | "all"
+    ovDepth: 1
   };
 
   var el = {};
@@ -68,6 +71,7 @@
 
     mini = new Graph($("#gmini"), {
       labelMode: "auto",
+      pinFocus: true,
       onSelect: function (n) { go(routeOf(n.id)); },
       onHover: tipFor
     });
@@ -133,7 +137,10 @@
     var h = (location.hash || "#/").replace(/^#\/?/, "");
     if (!h) return { kind: "home" };
     var bits = h.split("/");
-    if (bits[0] === "graph") return { kind: "graph" };
+    if (bits[0] === "graph") {
+      var gf = bits[1] ? decodeURIComponent(bits[1]) : null;
+      return { kind: "graph", focus: gf && N[gf] ? gf : null };
+    }
     if (bits[0] === "changes") return { kind: "changes", focus: bits[1] || null };
     var pref = ROUTE_TO_ID[bits[0]];
     if (!pref || !bits[1]) return { kind: "home" };
@@ -151,8 +158,19 @@
     var r = parseHash();
 
     if (r.kind === "graph") {
-      if (!state.route) { state.route = { kind: "home" }; renderHome(); }
-      openOverlay();
+      // Opening a focused graph URL cold: render the provision behind the
+      // overlay so closing it lands on the article, not the home page.
+      if (r.focus && (!state.route || state.route.id !== r.focus)) {
+        state.route = { kind: "node", id: r.focus };
+        renderNode(N[r.focus], null);
+        renderGraphFor(r.focus);
+        showTocTab(TAB_FOR[N[r.focus].type]);
+        markToc(r.focus);
+      } else if (!state.route) {
+        state.route = { kind: "home" };
+        renderHome();
+      }
+      openOverlay(r.focus);
       return;
     }
     if (!el.overlay.hidden) closeOverlay(true);
@@ -840,7 +858,10 @@
           if (keep[other] != null || !N[other]) return;
           if (!show[N[other].type]) return;
           keep[other] = d;
-          next.push(other);
+          // Defined terms are leaves, never routes. 'provider' is used by 161
+          // provisions, so hopping through it would drag in most of the Act and
+          // call it a neighbourhood.
+          if (N[other].type !== "definition") next.push(other);
         });
       });
       frontier = next;
@@ -945,21 +966,74 @@
     });
   }
 
-  function paintOverlay() {
-    var g = wholeGraph(state.ovShow);
-    full.setFocus(state.route && state.route.id).setData(g.nodes, g.edges);
-    el.ovSub.textContent = g.nodes.length + " provisions · " + g.edges.length + " connections";
+  function paintOverlay(seed) {
+    var focus = state.ovFocus;
+    var scoped = state.ovScope === "focus" && focus && N[focus];
+
+    $("#ov-depth").hidden = !scoped;
+    $("#ov-scope").querySelectorAll(".seg-btn").forEach(function (b) {
+      b.classList.toggle("is-on", b.dataset.scope === (scoped ? "focus" : "all"));
+    });
+    $("#ov-scope").querySelector('[data-scope="focus"]').disabled = !focus;
+
+    var g;
+    if (scoped) {
+      g = neighbourhood(focus, state.ovDepth, state.ovShow);
+      $("#ov-title").textContent = N[focus].label;
+      el.ovSub.textContent = state.ovDepth + (state.ovDepth === 1 ? " hop · " : " hops · ") +
+        g.nodes.length + " provisions · " + g.edges.length + " connections";
+    } else {
+      g = wholeGraph(state.ovShow);
+      $("#ov-title").textContent = "Citation graph";
+      el.ovSub.textContent = "The whole Act · " + g.nodes.length + " provisions · " +
+        g.edges.length + " connections";
+    }
+
+    full.pinFocus = !!scoped;
+    full.setFocus(scoped ? focus : (state.route && state.route.id));
+    full.setData(g.nodes, g.edges);
+
+    // Grow out of the layout the reader was just looking at, rather than
+    // scattering and re-solving from nothing.
+    if (seed && scoped) seedFromMini();
   }
 
-  function openOverlay() {
-    if (!el.overlay.hidden) return;
+  function seedFromMini() {
+    if (!mini || !mini.nodes.length || !full.w) return;
+    var s = Math.min(full.w / (mini.w || 1), full.h / (mini.h || 1));
+    var moved = 0;
+    full.nodes.forEach(function (n) {
+      var m = mini.byId[n.id];
+      if (!m) return;
+      n.x = full.w / 2 + (m.x - mini.w / 2) * s;
+      n.y = full.h / 2 + (m.y - mini.h / 2) * s;
+      moved++;
+    });
+    if (moved) { full.fit(); full.kick(0.35); }
+  }
+
+  function openOverlay(focus) {
+    var wasOpen = !el.overlay.hidden;
+    state.ovFocus = focus || null;
+    // Expanding from a provision keeps you on that provision; the Graph button
+    // in the top bar opens the whole Act.
+    state.ovScope = focus ? "focus" : "all";
+    state.ovDepth = focus ? state.depth : state.ovDepth || 1;
+    syncOvDepth();
+    if (wasOpen) { paintOverlay(true); return; }
+
     el.overlay.hidden = false;
     requestAnimationFrame(function () {
       full.resize();
-      paintOverlay();
-      full.kick(1);
+      paintOverlay(true);
     });
     document.addEventListener("keydown", escClose);
+  }
+
+  function syncOvDepth() {
+    $("#ov-depth").querySelectorAll(".seg-btn").forEach(function (b) {
+      b.classList.toggle("is-on", +b.dataset.ovdepth === state.ovDepth);
+    });
   }
 
   function closeOverlay(silent) {
@@ -967,7 +1041,7 @@
     el.overlay.hidden = true;
     document.removeEventListener("keydown", escClose);
     tipForNode(null);
-    if (!silent && location.hash === "#/graph") {
+    if (!silent && /^#\/graph(\/|$)/.test(location.hash)) {
       history.replaceState(null, "", state.route && state.route.id ? routeOf(state.route.id) : "#/");
     }
   }
@@ -1146,8 +1220,30 @@
       });
     });
 
-    $("#btn-expand").addEventListener("click", function () { go("#/graph"); });
-    $("#btn-graph").addEventListener("click", function () { go("#/graph"); });
+    // Expand keeps what you are reading in view; the top-bar button is the
+    // whole Act.
+    $("#btn-expand").addEventListener("click", function () {
+      var id = state.route && state.route.id;
+      go(id ? "#/graph/" + encodeURIComponent(id) : "#/graph");
+    });
+    $("#btn-graph").addEventListener("click", function (ev) {
+      ev.preventDefault();
+      go("#/graph");
+    });
+
+    $("#ov-scope").addEventListener("click", function (ev) {
+      var b = ev.target.closest(".seg-btn");
+      if (!b || b.disabled) return;
+      state.ovScope = b.dataset.scope;
+      paintOverlay(false);
+    });
+    $("#ov-depth").addEventListener("click", function (ev) {
+      var b = ev.target.closest(".seg-btn");
+      if (!b) return;
+      state.ovDepth = +b.dataset.ovdepth;
+      syncOvDepth();
+      paintOverlay(false);
+    });
     $("#btn-close").addEventListener("click", function () { closeOverlay(); render(); });
     $("#btn-theme").addEventListener("click", toggleTheme);
 

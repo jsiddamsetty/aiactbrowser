@@ -151,6 +151,13 @@ of EUR-Lex source documents and the parsers out of the deployment. Pushing to
 - The rail graph shows 1 or 2 hops around what you are reading; the legend
   chips filter node types and always show how many of each type are *there*,
   not how many are currently drawn
+- **Expand** opens that same neighbourhood full-screen, centred on what you are
+  reading, with 1/2/3-hop and a *Whole Act* toggle — it is a linkable route
+  (`#/graph/art_25`), so closing it returns you to the provision. The top-bar
+  **Graph** button opens the whole Act instead
+- Defined terms are leaves in the hop graph, never routes: `'provider'` is used
+  by 161 provisions, so hopping *through* it would drag in most of the Act and
+  call it a neighbourhood
 - **Outgoing and backlinks are tabbed** under the graph, so backlinks are never
   pushed below the fold by a long citation list
 - Hovering a defined term previews its definition; clicking opens it

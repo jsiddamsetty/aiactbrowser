@@ -113,9 +113,22 @@
 <div class="overlay" id="overlay" hidden>
   <div class="overlay-bar">
     <div class="overlay-title">
-      <h2>Citation graph</h2>
+      <h2 id="ov-title">Citation graph</h2>
       <p id="ov-sub">The whole Act — every article, recital, annex and defined term.</p>
     </div>
+
+    <div class="overlay-controls">
+      <div class="seg" id="ov-scope" role="group" aria-label="Graph scope">
+        <button class="seg-btn" data-scope="focus" type="button">Neighbourhood</button>
+        <button class="seg-btn is-on" data-scope="all" type="button">Whole Act</button>
+      </div>
+      <div class="seg" id="ov-depth" role="group" aria-label="Graph depth" hidden>
+        <button class="seg-btn is-on" data-ovdepth="1" type="button">1 hop</button>
+        <button class="seg-btn" data-ovdepth="2" type="button">2 hops</button>
+        <button class="seg-btn" data-ovdepth="3" type="button">3 hops</button>
+      </div>
+    </div>
+
     <div class="overlay-tools" id="ov-filters"></div>
     <button id="btn-close" class="icon-btn" type="button" title="Close graph" aria-label="Close graph">
       <svg viewBox="0 0 24 24"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>

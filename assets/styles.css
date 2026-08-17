@@ -1078,3 +1078,25 @@ sup.fn:hover { color: var(--accent); }
   background: var(--sunk); border-radius: 999px; padding: 1px 6px;
 }
 .conn-tab.is-on .conn-n { background: var(--c-article-bg); color: var(--accent); }
+
+/* expanded-graph controls */
+.overlay-controls {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  margin-left: 20px;
+}
+.overlay-controls .seg-btn { padding: 4px 10px; font-size: 11px; }
+.overlay-controls .seg-btn:disabled { opacity: .4; cursor: not-allowed; }
+.overlay-title h2 {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 34ch;
+}
+.overlay-bar { gap: 12px; }
+.overlay-tools { margin-left: auto; }
+
+@media (max-width: 1100px) {
+  .overlay-controls { margin-left: 10px; }
+  .overlay-tools { display: none; }
+}
+@media (max-width: 720px) {
+  .overlay-controls { display: none; }
+}

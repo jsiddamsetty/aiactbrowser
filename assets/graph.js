@@ -31,6 +31,9 @@
     // Dimming everything but the focus reads well in the small rail; in the
     // full view it fights exploration, so there focus only gets a ring.
     this.dimFocus = opts.dimFocus !== false;
+    // A "neighbourhood of X" view should keep X in the middle; letting the
+    // simulation carry it to the edge defeats the point of the view.
+    this.pinFocus = !!opts.pinFocus;
     this.onSelect = opts.onSelect || function () {};
     this.onHover = opts.onHover || function () {};
     this.colors = opts.colors || {};
@@ -156,6 +159,12 @@
 
     for (i = 0; i < len; i++) {
       a = n[i];
+
+      if (this.pinFocus && a.id === this.focusId && !(this.drag && this.drag.node === a)) {
+        a.x = cx; a.y = cy; a.vx = 0; a.vy = 0;
+        continue;
+      }
+
       // Gentle pull to centre, stronger on the focus node so it sits mid-frame.
       var pull = a.id === this.focusId ? grav * 2.6 : grav;
       a.vx += (cx - a.x) * pull;
@@ -240,7 +249,14 @@
     var ink = css.getPropertyValue("--ink").trim();
     var panel = css.getPropertyValue("--panel").trim();
 
-    var hl = this.hover || (this.dimFocus && this.focusId ? this.byId[this.focusId] : null);
+    // Two strengths of highlight. Hovering is a deliberate probe, so it dims
+    // the rest hard. A resting focus should still show its own edges lit —
+    // otherwise the centred node looks unconnected — but only push the rest
+    // gently back, so the graph stays explorable.
+    var focusNode = (this.dimFocus || this.pinFocus) && this.focusId
+      ? this.byId[this.focusId] : null;
+    var hl = this.hover || focusNode;
+    var hard = !!this.hover;
     var near = null;
     if (hl) {
       near = {};
@@ -271,7 +287,8 @@
         c.lineWidth = 1.6 / this.scale;
       } else {
         c.strokeStyle = inkMuted;
-        c.globalAlpha = near ? 0.07 : 0.16;
+        var base = this.nodes.length < 60 ? 0.32 : 0.16;
+        c.globalAlpha = near ? (hard ? 0.07 : 0.13) : base;
         c.lineWidth = 1 / this.scale;
       }
       c.stroke();
@@ -284,7 +301,7 @@
       var dim = near && !near[n.id];
       var isFocus = n.id === this.focusId;
 
-      c.globalAlpha = dim ? 0.2 : 1;
+      c.globalAlpha = dim ? (hard ? 0.2 : 0.6) : 1;
       c.beginPath();
       c.arc(n.x, n.y, n.r, 0, 6.2832);
       c.fillStyle = col[n.type] || inkMuted;
@@ -332,7 +349,7 @@
         var lit2 = near && near[q.id];
         // Hovering always reveals the neighbourhood's labels, budget or not.
         if (!isF && !lit2 && q.lrank >= budget) continue;
-        if (near && !near[q.id] && !isF) continue;
+        if (hard && near && !near[q.id] && !isF) continue;
 
         var size = (isF ? 12 : 10.5) / this.scale;
         c.font = (isF ? "600 " : "500 ") + size + 'px "IBM Plex Mono", monospace';
@@ -352,7 +369,7 @@
         if (clash && !isF) continue;
         placed.push([bx, by, bw2, bh2]);
 
-        c.globalAlpha = near && !near[q.id] ? 0.25 : 0.95;
+        c.globalAlpha = near && !near[q.id] ? (hard ? 0.25 : 0.55) : 0.95;
         c.fillStyle = panel;
         c.fillRect(bx, by, bw2, bh2);
         c.fillStyle = isF ? ink : (col[q.type] || ink);
