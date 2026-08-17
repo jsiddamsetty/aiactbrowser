@@ -538,8 +538,9 @@
       a.addEventListener("mouseleave", function () { tipForNode(null); });
     });
     root.querySelectorAll(".term").forEach(function (a) {
-      a.addEventListener("mouseenter", function (ev) { tipForNode(N[a.dataset.node], ev); });
-      a.addEventListener("mouseleave", function () { tipForNode(null); });
+      a.addEventListener("mouseenter", function (ev) { tipForTerm(N[a.dataset.node], ev); });
+      a.addEventListener("mouseleave", function () { tipForTerm(null); });
+      // Clicking follows the href to the definition page — unchanged.
     });
   }
 
@@ -800,22 +801,55 @@
 
   /* ── tooltip ──────────────────────────────────────────────── */
 
+  var tipTimer = null;
+
+  function hideTip() {
+    if (tipTimer) { clearTimeout(tipTimer); tipTimer = null; }
+    el.tip.hidden = true;
+  }
+
+  function placeTip(x, y) {
+    var r = el.tip.getBoundingClientRect();
+    var left = x + 14, top = y + 18;
+    if (left + r.width > innerWidth - 8) left = innerWidth - r.width - 8;
+    if (top + r.height > innerHeight - 8) top = y - r.height - 14;
+    el.tip.style.left = Math.max(8, left) + "px";
+    el.tip.style.top = Math.max(8, top) + "px";
+  }
+
   function tipFor(n, ev) { tipForNode(n ? N[n.id] : null, ev); }
 
   function tipForNode(n, ev) {
-    if (!n) { el.tip.hidden = true; return; }
+    if (!n) { hideTip(); return; }
+    if (tipTimer) { clearTimeout(tipTimer); tipTimer = null; }
     el.tip.innerHTML =
       '<div class="tip-id" style="color:var(--c-' + n.type + ')">' + esc(n.label) + "</div>" +
       '<div class="tip-title">' + esc(n.type === "definition" ? "‘" + n.term + "’" : (n.title || lede(n.text, 90))) + "</div>" +
       '<div class="tip-sub">' + (OUT[n.id].length) + " out · " + (IN[n.id].length) + " in</div>";
     el.tip.hidden = false;
+    placeTip(ev ? ev.clientX : 0, ev ? ev.clientY : 0);
+  }
 
-    var x = (ev ? ev.clientX : 0) + 14, y = (ev ? ev.clientY : 0) + 16;
-    var r = el.tip.getBoundingClientRect();
-    if (x + r.width > innerWidth - 8) x = innerWidth - r.width - 8;
-    if (y + r.height > innerHeight - 8) y = (ev ? ev.clientY : 0) - r.height - 12;
-    el.tip.style.left = Math.max(8, x) + "px";
-    el.tip.style.top = Math.max(8, y) + "px";
+  // Hovering a defined term shows the definition itself. The short delay stops
+  // cards flashing as the cursor sweeps a paragraph; clicking still opens it.
+  var TERM_TIP_DELAY = 130;
+
+  function tipForTerm(d, ev) {
+    if (tipTimer) { clearTimeout(tipTimer); tipTimer = null; }
+    if (!d) { hideTip(); return; }
+
+    var x = ev.clientX, y = ev.clientY;
+    tipTimer = setTimeout(function () {
+      tipTimer = null;
+      var used = IN[d.id].length;
+      el.tip.innerHTML =
+        '<div class="tip-id" style="color:var(--c-definition)">Article 3, point (' + d.num + ")</div>" +
+        '<div class="tip-def">' + esc(d.text) + "</div>" +
+        '<div class="tip-sub">Click to open · used by ' + used +
+          (used === 1 ? " provision" : " provisions") + "</div>";
+      el.tip.hidden = false;
+      placeTip(x, y);
+    }, TERM_TIP_DELAY);
   }
 
   /* ── search ───────────────────────────────────────────────── */
@@ -939,6 +973,10 @@
     $("#btn-graph").addEventListener("click", function () { go("#/graph"); });
     $("#btn-close").addEventListener("click", function () { closeOverlay(); render(); });
     $("#btn-theme").addEventListener("click", toggleTheme);
+
+    // A fixed-position card would drift away from its word once the page moves.
+    document.addEventListener("scroll", hideTip, true);
+    window.addEventListener("blur", hideTip);
 
     $("#btn-toc").addEventListener("click", function () { toggleRail("show-toc"); });
     $("#btn-links").addEventListener("click", function () { toggleRail("show-graph"); });
