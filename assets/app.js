@@ -13,19 +13,19 @@
   var TERM_BY_KEY = {};
   var SEARCH = [];
 
-  var TYPES = ["article", "recital", "annex", "definition"];
-  var ALL_TYPES = { article: true, recital: true, annex: true, definition: true };
-  var TYPE_LABEL = { article: "Articles", recital: "Recitals", annex: "Annexes", definition: "Terms" };
+  var TYPES = ["article", "recital", "annex", "definition", "guidance"];
+  var ALL_TYPES = { article: true, recital: true, annex: true, definition: true, guidance: true };
+  var TYPE_LABEL = { article: "Articles", recital: "Recitals", annex: "Annexes", definition: "Terms", guidance: "Guidance" };
   var KIND_LABEL = {
     cites: "cites", annex: "annex", uses: "defined term",
-    explains: "cites", relates: "topical"
+    explains: "cites", relates: "topical", interprets: "interprets"
   };
 
   var state = {
     route: null,
     depth: 1,
-    show: { article: true, recital: true, annex: true, definition: true },
-    ovShow: { article: true, recital: true, annex: true, definition: true },
+    show: { article: true, recital: true, annex: true, definition: true, guidance: true },
+    ovShow: { article: true, recital: true, annex: true, definition: true, guidance: true },
     ovFocus: null,          // provision the expanded graph is centred on
     ovScope: "all",         // "focus" | "all"
     ovDepth: 1
@@ -92,7 +92,8 @@
   }
 
   function index() {
-    var all = DATA.articles.concat(DATA.recitals, DATA.annexes, DATA.definitions);
+    var all = DATA.articles.concat(DATA.recitals, DATA.annexes, DATA.definitions,
+      DATA.guidance || []);
     all.forEach(function (n) { N[n.id] = n; OUT[n.id] = []; IN[n.id] = []; });
 
     DATA.edges.forEach(function (e) {
@@ -125,8 +126,8 @@
 
   /* ── routing ──────────────────────────────────────────────── */
 
-  var ROUTE_TO_ID = { article: "art_", recital: "rct_", annex: "anx_", term: "def_" };
-  var ID_TO_ROUTE = { art_: "article", rct_: "recital", anx_: "annex", def_: "term" };
+  var ROUTE_TO_ID = { article: "art_", recital: "rct_", annex: "anx_", term: "def_", guidance: "gdl_" };
+  var ID_TO_ROUTE = { art_: "article", rct_: "recital", anx_: "annex", def_: "term", gdl_: "guidance" };
 
   function routeOf(id) {
     var p = id.slice(0, 4);
@@ -204,7 +205,7 @@
   /* ── contents rail ────────────────────────────────────────── */
 
   var tocTab = "act";
-  var TAB_FOR = { article: "act", recital: "recitals", annex: "annexes", definition: "defs" };
+  var TAB_FOR = { article: "act", recital: "recitals", annex: "annexes", definition: "defs", guidance: "guidance" };
 
   /* Follow the reader: opening a recital switches the rail to the recital list. */
   function showTocTab(tab) {
@@ -257,6 +258,27 @@
       DATA.annexes.forEach(function (a) {
         h += tocLink(a.id, a.roman, a.title);
       });
+    } else if (tocTab === "guidance") {
+      // Two documents, each grouped the way its own contents page groups it.
+      (DATA.guidanceDocs || []).forEach(function (d) {
+        var secs = DATA.guidance.filter(function (g) { return g.doc === d.slug; });
+        h += '<div class="gdoc-head"><span class="gdoc-name">' + esc(d.name) + "</span>" +
+          '<span class="gdoc-badge" data-draft="' + (d.draft ? "1" : "0") + '">' +
+          (d.draft ? "draft" : "adopted") + "</span></div>";
+        var seenPart = null, open = "";
+        secs.forEach(function (g) {
+          if (g.part !== seenPart) {
+            if (seenPart !== null) h += "</div></div>";
+            seenPart = g.part;
+            h += '<div class="chap"><button class="chap-btn" type="button">' +
+              '<span class="chap-name">' + esc(g.part) + "</span>" +
+              '<svg class="chap-caret" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>' +
+              "</button>" + '<div class="chap-list">';
+          }
+          h += tocLink(g.id, "§ " + g.sec, g.title);
+        });
+        if (seenPart !== null) h += "</div></div>";
+      });
     } else {
       DATA.definitions.forEach(function (d) {
         h += tocLink(d.id, String(d.num), d.term);
@@ -307,6 +329,25 @@
       "<span class="+'"banner-text"'+">Amended by the " + esc(m.amendedBy.short) + ": <b>" +
       c.changed + " provisions</b> added or rewritten.</span>" +
       '<span class="banner-go">See what changed →</span></a>';
+
+    /* the Commission's own reading of Articles 5 and 6, section by section */
+    if (DATA.guidance && DATA.guidance.length) {
+      h += '<div class="block"><div class="block-head"><h2>Commission guidance</h2>' +
+        '<span class="block-count">' + DATA.guidance.length + "</span>" +
+        '<span class="block-note">attached to the provisions it interprets</span></div>' +
+        '<div class="gcards">';
+      (DATA.guidanceDocs || []).forEach(function (d) {
+        var secs = DATA.guidance.filter(function (g) { return g.doc === d.slug; });
+        h += '<button class="gcard" type="button" data-goto="' + (secs[0] ? secs[0].id : "") + '">' +
+          '<span class="gcard-top"><span class="gcard-name">' + esc(d.name) + "</span>" +
+          '<span class="gdoc-badge" data-draft="' + (d.draft ? "1" : "0") + '">' +
+          (d.draft ? "draft" : "adopted") + "</span></span>" +
+          '<span class="gcard-title">' + esc(d.title) + "</span>" +
+          '<span class="gcard-sub">' + esc(d.cite) + " · " + secs.length + " sections</span>" +
+          "</button>";
+      });
+      h += "</div></div>";
+    }
 
     h += '<div class="block"><div class="block-head"><h2>Chapters</h2></div><div class="chapgrid">';
     DATA.chapters.forEach(function (ch) {
@@ -491,6 +532,10 @@
         "<span>" + esc(n.chapterLabel) + ": " + esc(n.chapterTitle) + "</span>";
       if (n.sectionLabel) h += "<i>›</i><span>" + esc(n.sectionLabel) + ": " + esc(n.sectionTitle) + "</span>";
       h += "</nav>";
+    } else if (n.type === "guidance") {
+      h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>Guidance</span>' +
+        "<i>›</i><span>" + esc(n.docName) + "</span>" +
+        "<i>›</i><span>" + esc(n.part) + "</span></nav>";
     } else {
       h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>' +
         esc(TYPE_LABEL[n.type]) + "</span></nav>";
@@ -508,6 +553,18 @@
     if (n.type === "definition") {
       h += '<h1 class="doc-title">‘' + esc(n.term) + "’</h1>" +
         '<p class="doc-num">Article 3, point (' + n.num + ")</p>";
+    } else if (n.type === "guidance") {
+      var gdoc = guidanceDoc(n.doc);
+      h += '<h1 class="doc-title">' + esc(n.title) + "</h1>" +
+        '<p class="doc-num">§ ' + esc(n.sec) + " · " + esc(gdoc ? gdoc.title : n.docName) +
+        (n.paras ? " · paras (" + n.paras[0] + ")–(" + n.paras[1] + ")" : "") + "</p>";
+      h += '<div class="gl-note" data-draft="' + (n.draft ? "1" : "0") + '">' +
+        (n.draft
+          ? "<b>Draft.</b> Published for stakeholder consultation and not yet adopted — " +
+            "the final guidelines may differ."
+          : "<b>Adopted</b> — " + esc(gdoc ? gdoc.cite : "") + ".") +
+        " Commission guidelines are not binding; only the Court of Justice can " +
+        "interpret the Act authoritatively.</div>";
     } else {
       h += '<h1 class="doc-title">' + esc(n.title || n.label) + "</h1>";
       if (n.type !== "recital") h += '<p class="doc-num">' + esc(n.label) + "</p>";
@@ -527,6 +584,13 @@
     if (n.type === "recital") {
       renderRecitalTargets(el.doc, n);
     }
+    /* Commission guidance attached to the provisions it interprets */
+    if (n.type === "article" || n.type === "annex" || n.type === "definition") {
+      renderGuidanceFor(el.doc, n);
+    }
+    if (n.type === "guidance") {
+      renderGuidanceNav(el.doc, n);
+    }
 
     if (para) {
       var t = el.doc.querySelector("#" + para);
@@ -543,7 +607,109 @@
     if (n.type === "article") return "Article " + artKey(n);
     if (n.type === "recital") return "Recital " + n.num;
     if (n.type === "annex") return "Annex " + n.roman;
+    if (n.type === "guidance") return "Commission guidance";
     return "Defined term";
+  }
+
+  function guidanceDoc(slug) {
+    var docs = DATA.guidanceDocs || [];
+    for (var i = 0; i < docs.length; i++) if (docs[i].slug === slug) return docs[i];
+    return null;
+  }
+
+  /* The guidance sections that interpret a provision, as a block after the
+     recitals — same idea, one more layer: the Commission's own reading.
+     Article 5 alone is read by a hundred-plus sections, so a long list
+     folds into its document's own groups. */
+  function renderGuidanceFor(root, n) {
+    var gs = IN[n.id]
+      .filter(function (e) { return e.k === "interprets" && N[e.s] && N[e.s].type === "guidance"; })
+      .map(function (e) { return N[e.s]; })
+      .sort(function (a, b) { return a.num - b.num; });
+    if (!gs.length) return;
+
+    var sec = document.createElement("section");
+    sec.className = "block";
+    var h = '<div class="block-head"><h2>Commission guidance</h2>' +
+      '<span class="block-count">' + gs.length + "</span>" +
+      '<span class="block-note">how the Commission reads this provision</span></div>';
+
+    function row(g) {
+      return '<button class="link" type="button" data-id="' + g.id + '">' +
+        '<span class="link-id" data-type="guidance">§ ' + esc(g.sec) + "</span>" +
+        '<span class="link-title">' + esc(g.title) + "</span></button>";
+    }
+
+    var flat = gs.length <= 8;
+    var seenDoc = null;
+    var groups = [], cur = null;
+    gs.forEach(function (g) {
+      if (!cur || cur.doc !== g.doc || cur.part !== g.part) {
+        cur = { doc: g.doc, part: g.part, draft: g.draft, items: [] };
+        groups.push(cur);
+      }
+      cur.items.push(g);
+    });
+
+    groups.forEach(function (grp) {
+      if (grp.doc !== seenDoc) {
+        seenDoc = grp.doc;
+        var d = guidanceDoc(grp.doc);
+        h += '<div class="gdoc-row"><span>' + esc(d ? d.name : "") + "</span>" +
+          '<span class="gdoc-badge" data-draft="' + (grp.draft ? "1" : "0") + '">' +
+          (grp.draft ? "draft" : "adopted") + "</span></div>";
+      }
+      if (flat) {
+        h += '<div class="links">' + grp.items.map(row).join("") + "</div>";
+      } else {
+        h += '<div class="gl-group"><button class="gl-group-btn" type="button">' +
+          '<span class="gl-group-name">' + esc(grp.part) + "</span>" +
+          '<span class="gl-group-n">' + grp.items.length + "</span>" +
+          '<svg class="chap-caret" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>' +
+          "</button>" +
+          '<div class="gl-group-list links">' + grp.items.map(row).join("") + "</div></div>";
+      }
+    });
+
+    sec.innerHTML = h;
+    root.appendChild(sec);
+    sec.querySelectorAll(".gl-group-btn").forEach(function (b) {
+      b.addEventListener("click", function () { b.parentNode.classList.toggle("is-open"); });
+    });
+    wireLinks(sec);
+  }
+
+  /* Read a guidance document like a book: what it interprets, then on to the
+     next section without a trip back to the rail. */
+  function renderGuidanceNav(root, n) {
+    var tg = OUT[n.id]
+      .filter(function (e) { return e.k === "interprets"; })
+      .map(function (e) { return N[e.t]; })
+      .filter(Boolean);
+
+    var sec = document.createElement("section");
+    sec.className = "block";
+    var h = '<div class="block-head"><h2>Interprets</h2>' +
+      '<span class="block-count">' + tg.length + "</span></div>";
+    if (tg.length) {
+      h += '<div class="links">' + tg.map(function (x) { return linkRow(x, ""); }).join("") + "</div>";
+    }
+
+    var sibs = DATA.guidance.filter(function (g) { return g.doc === n.doc; });
+    var at = sibs.findIndex(function (g) { return g.id === n.id; });
+    var prev = at > 0 ? sibs[at - 1] : null;
+    var next = at >= 0 && at < sibs.length - 1 ? sibs[at + 1] : null;
+    if (prev || next) {
+      h += '<div class="gl-nav">' +
+        (prev ? '<a class="gl-nav-a" href="' + routeOf(prev.id) + '">← § ' + esc(prev.sec) +
+          ' <span>' + esc(lede(prev.title, 46)) + "</span></a>" : "<span></span>") +
+        (next ? '<a class="gl-nav-a gl-nav-next" href="' + routeOf(next.id) + '">§ ' + esc(next.sec) +
+          ' <span>' + esc(lede(next.title, 46)) + "</span> →</a>" : "") +
+        "</div>";
+    }
+    sec.innerHTML = h;
+    root.appendChild(sec);
+    wireLinks(sec);
   }
 
 
@@ -564,9 +730,8 @@
     var h = '<div class="block-head"><h2>Recitals</h2>' +
       '<span class="block-count">' + recs.length + "</span>";
     if (recs.length) {
-      h += '<span class="block-note">' +
-        (explicit ? explicit + " name this provision · " : "") +
-        "others matched by topic</span>";
+      h += '<span class="block-note">' + explicit + " name this provision" +
+        (explicit < recs.length ? " · others matched by topic" : "") + "</span>";
     }
     h += "</div>";
 
@@ -672,7 +837,7 @@
     el.conn.scrollTop = 0;
   }
 
-  var KIND_ORDER = { cites: 0, annex: 1, explains: 2, relates: 3, uses: 4 };
+  var KIND_ORDER = { interprets: 0, cites: 1, annex: 2, explains: 3, relates: 4, uses: 5 };
 
   function edgeSort(a, b) {
     var oa = a.k in KIND_ORDER ? KIND_ORDER[a.k] : 9;
@@ -701,6 +866,7 @@
     if (n.type === "article") return "Art. " + artKey(n);
     if (n.type === "recital") return (n.amending ? "Omni. " : "Rec. ") + n.num;
     if (n.type === "annex") return "Annex " + n.roman;
+    if (n.type === "guidance") return (n.doc === "pp" ? "Proh." : "HR") + " § " + n.sec;
     return "Term " + n.num;
   }
 
@@ -757,9 +923,13 @@
     return out;
   }
 
-  var REF_RE = /\bArticles?\s+(\d{1,3})(\(\d{1,2}\))?|\bAnnexes?\s+(X{0,3}(?:IX|IV|V?I{0,3}))\b/g;
+  var REF_RE = /\bArticles?\s+(\d{1,3})(\(\d{1,2}\))?|\bAnnexes?\s+(X{0,3}(?:IX|IV|V?I{0,3}))\b|\bRecitals?\s+(\d{1,3})\b|\bSections?\s+(\d{1,2}(?:\.\d{1,2}){1,3})\b/g;
+
+  // "Article 4(4) of Regulation (EU) 2016/679" is the GDPR, not the Act.
+  var OTHER_ACT_RE = /^\s*(?:\(\d+\)|\([a-z]+\)|,|and|or|to|first|second|third|subparagraphs?|points?|\d{1,3}|\s)*of\s+(?:Regulation|Directive|Decision|the\s+Charter|the\s+Treaty|Council)/;
 
   function linkifyRefs(root, selfId) {
+    var selfDoc = N[selfId] && N[selfId].type === "guidance" ? N[selfId].doc : null;
     textNodes(root).forEach(function (t) {
       var s = t.nodeValue;
       REF_RE.lastIndex = 0;
@@ -774,8 +944,15 @@
           if (m[2]) para = "p" + parseInt(m[2].slice(1, -1), 10);
         } else if (m[3] && ROMAN_ORD[m[3]]) {
           id = "anx_" + m[3];
+        } else if (m[4]) {
+          id = "rct_" + parseInt(m[4], 10);
+        } else if (m[5] && selfDoc) {
+          // Inside the guidelines, "Section 2.7.1" is a section of the same
+          // document; elsewhere the word means a Section of the Act itself.
+          id = "gdl_" + selfDoc + "-" + m[5];
         }
         if (!id || !N[id] || id === selfId) continue;
+        if ((m[1] || m[3] || m[4]) && OTHER_ACT_RE.test(s.slice(m.index + m[0].length))) continue;
 
         if (m.index > last) frag.appendChild(document.createTextNode(s.slice(last, m.index)));
         var a = document.createElement("a");
@@ -858,10 +1035,11 @@
           if (keep[other] != null || !N[other]) return;
           if (!show[N[other].type]) return;
           keep[other] = d;
-          // Defined terms are leaves, never routes. 'provider' is used by 161
-          // provisions, so hopping through it would drag in most of the Act and
-          // call it a neighbourhood.
-          if (N[other].type !== "definition") next.push(other);
+          // Defined terms and guidance sections are leaves, never routes.
+          // 'provider' is used by 161 provisions and a guidance section can
+          // cite thirty articles, so hopping through either would drag in
+          // most of the Act and call it a neighbourhood.
+          if (N[other].type !== "definition" && N[other].type !== "guidance") next.push(other);
         });
       });
       frontier = next;
@@ -905,7 +1083,7 @@
 
   var COLLECTION = {
     article: "articles", recital: "recitals",
-    annex: "annexes", definition: "definitions"
+    annex: "annexes", definition: "definitions", guidance: "guidance"
   };
 
   function wholeGraph(show) {

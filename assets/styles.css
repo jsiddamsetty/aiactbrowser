@@ -23,11 +23,13 @@
   --c-recital:    #CC6F00;
   --c-annex:      #00A38C;
   --c-definition: #A30877;
+  --c-guidance:   #6A40D8;
 
   --c-article-bg:    #1F4FCC14;
   --c-recital-bg:    #CC6F0014;
   --c-annex-bg:      #00A38C14;
   --c-definition-bg: #A3087714;
+  --c-guidance-bg:   #6A40D814;
 
   --accent:     var(--c-article);
   --focus:      #1F4FCC;
@@ -60,11 +62,13 @@
   --c-recital:    #AF8600;
   --c-annex:      #00AD7F;
   --c-definition: #B93C8C;
+  --c-guidance:   #9678EC;
 
   --c-article-bg:    #4D68DC24;
   --c-recital-bg:    #AF860024;
   --c-annex-bg:      #00AD7F24;
   --c-definition-bg: #B93C8C24;
+  --c-guidance-bg:   #9678EC24;
 
   --focus: #7B93F0;
   --shadow: 0 1px 2px #0006, 0 8px 24px -12px #0009;
@@ -448,6 +452,10 @@ h1.doc-title {
 .xref:hover { border-bottom-color: currentColor; background: var(--c-article-bg); }
 .xref[data-type="annex"] { color: var(--c-annex); border-bottom-color: color-mix(in srgb, var(--c-annex) 35%, transparent); }
 .xref[data-type="annex"]:hover { background: var(--c-annex-bg); }
+.xref[data-type="recital"] { color: var(--c-recital); border-bottom-color: color-mix(in srgb, var(--c-recital) 35%, transparent); }
+.xref[data-type="recital"]:hover { background: var(--c-recital-bg); }
+.xref[data-type="guidance"] { color: var(--c-guidance); border-bottom-color: color-mix(in srgb, var(--c-guidance) 35%, transparent); }
+.xref[data-type="guidance"]:hover { background: var(--c-guidance-bg); }
 
 .term {
   color: var(--c-definition);
@@ -574,11 +582,13 @@ sup.fn:hover { color: var(--accent); }
 [data-type="recital"]    { --c: var(--c-recital); }
 [data-type="annex"]      { --c: var(--c-annex); }
 [data-type="definition"] { --c: var(--c-definition); }
+[data-type="guidance"]   { --c: var(--c-guidance); }
 .kicker[data-type], .link-id[data-type], .res-id[data-type] { color: var(--c); }
 .kicker[data-type="article"]    { background: var(--c-article-bg); }
 .kicker[data-type="recital"]    { background: var(--c-recital-bg); }
 .kicker[data-type="annex"]      { background: var(--c-annex-bg); }
 .kicker[data-type="definition"] { background: var(--c-definition-bg); }
+.kicker[data-type="guidance"]   { background: var(--c-guidance-bg); }
 
 /* ── graph rail ────────────────────────────────────────────── */
 
@@ -876,23 +886,30 @@ sup.fn:hover { color: var(--accent); }
   --del-bg:    #B93C8C26;
 }
 
-/* changed blocks, marked inside the running text */
-.lawtext [data-chg] {
+/* Changed blocks, marked inside the running text. A marked paragraph carries
+   the mark on its section and again on every block inside it, so only the
+   outermost mark is drawn. */
+.lawtext [data-chg]:not([data-chg] [data-chg]) {
   border-left: 2px solid var(--chg-rule);
   padding-left: 14px;
   margin-left: -16px;
   background: var(--chg-bg);
   border-radius: 0 3px 3px 0;
 }
-.lawtext .para[data-chg] { padding-top: 2px; padding-bottom: 2px; }
-.lawtext [data-chg]::after {
-  content: attr(data-op) " 2026";
+.lawtext .para[data-chg]:not([data-chg] [data-chg]) { padding-top: 2px; padding-bottom: 2px; }
+.lawtext [data-chg]:not([data-chg] [data-chg])::after {
+  content: "changed 2026";
   display: block;
   font-family: var(--mono); font-size: 9.5px; font-weight: 500;
   letter-spacing: 0.06em; text-transform: uppercase;
   color: var(--chg-rule);
   margin-top: 4px;
 }
+/* the consolidated text carries the wording as it stands after the amendment,
+   so "replaced" means rewritten in 2026, not taken out */
+.lawtext [data-op="replaced"]:not([data-chg] [data-chg])::after { content: "rewritten 2026"; }
+.lawtext [data-op="inserted"]:not([data-chg] [data-chg])::after { content: "new in 2026"; }
+.lawtext [data-op="deleted"]:not([data-chg] [data-chg])::after { content: "removed 2026"; }
 .doc-deleted {
   font-family: var(--sans); font-size: 12.5px;
   color: var(--ink-3); font-style: italic;
@@ -1120,3 +1137,139 @@ sup.fn:hover { color: var(--accent); }
   .overlay-tools .lg { padding: 2px 7px 2px 4px; font-size: 10.5px; }
   .overlay-title p { font-size: 11.5px; }
 }
+
+/* ============================================================
+   Commission guidance
+   ============================================================ */
+
+/* the adopted / draft status of a guidance document */
+.gdoc-badge {
+  font-family: var(--mono); font-size: 9px; font-weight: 500;
+  letter-spacing: 0.07em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 3px;
+  color: var(--c-annex); background: var(--c-annex-bg);
+}
+.gdoc-badge[data-draft="1"] { color: var(--c-recital); background: var(--c-recital-bg); }
+
+/* contents rail: the two documents head their groups */
+.gdoc-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  margin: 14px 6px 6px;
+  font-size: 11px; font-weight: 600; color: var(--ink-2);
+  letter-spacing: 0.02em;
+}
+.gdoc-head:first-child { margin-top: 2px; }
+
+/* a document divider inside the guidance block on a provision page */
+.gdoc-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  margin: 10px 2px 4px;
+  font-size: 11.5px; font-weight: 600; color: var(--ink-2);
+}
+.gdoc-row:first-child { margin-top: 0; }
+
+/* adopted-or-draft note at the top of a guidance section */
+.gl-note {
+  font-family: var(--sans); font-size: 12.5px; line-height: 1.55;
+  color: var(--ink-2);
+  background: var(--c-guidance-bg);
+  border-left: 2px solid var(--c-guidance);
+  border-radius: 0 4px 4px 0;
+  padding: 9px 12px;
+  margin: 0 0 22px;
+}
+.gl-note b { color: var(--ink); }
+
+/* numbered guideline paragraphs — the number is how the Commission cites them */
+.gpara { display: flex; gap: 10px; margin: 0 0 1em; }
+.gnum {
+  flex: none; width: 44px; text-align: right;
+  font-family: var(--mono); font-size: 11.5px; color: var(--ink-3);
+  padding-top: 3px;
+}
+.gbody { min-width: 0; flex: 1; }
+.gbody > .doc-p:last-child { margin-bottom: 0; }
+.gpara.is-hit .gbody { background: var(--c-guidance-bg); border-radius: 4px; }
+
+/* worked examples, set off from the reasoning */
+.gl-ex {
+  margin: 10px 0 12px;
+  padding: 10px 14px;
+  background: var(--sunk);
+  border-left: 2px solid var(--c-guidance);
+  border-radius: 0 4px 4px 0;
+}
+.gl-ex::before {
+  content: "example";
+  display: block;
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--c-guidance);
+  margin-bottom: 4px;
+}
+.gl-ex .doc-p { margin: 0; font-size: 15px; }
+
+/* sub-headings inside a section: "a) Narrow procedural task" */
+.gl-h3 {
+  font-family: var(--sans); font-size: 14px; font-weight: 600;
+  color: var(--ink); margin: 22px 0 10px;
+}
+
+/* practical-example lists */
+.gl-list { margin: 8px 0 14px; padding-left: 22px; }
+.gl-list li { margin-bottom: 8px; }
+.gl-list li::marker { color: var(--c-guidance); }
+
+/* previous / next section, so a document reads through */
+.gl-nav {
+  display: flex; justify-content: space-between; gap: 12px;
+  margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid var(--rule-2);
+}
+.gl-nav-a {
+  font-family: var(--mono); font-size: 12px;
+  color: var(--c-guidance); text-decoration: none;
+  max-width: 48%;
+}
+.gl-nav-a span { color: var(--ink-3); font-family: var(--sans); }
+.gl-nav-a:hover span { color: var(--ink); }
+.gl-nav-next { text-align: right; margin-left: auto; }
+
+/* home page: one card per guidance document */
+.gcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.gcard {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  text-align: left; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--rule);
+  border-radius: 8px; padding: 14px 16px;
+}
+.gcard:hover { border-color: var(--c-guidance); }
+.gcard-top { display: flex; align-items: center; gap: 8px; width: 100%; justify-content: space-between; }
+.gcard-name {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 500;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--c-guidance);
+}
+.gcard-title { font-size: 14px; font-weight: 600; color: var(--ink); line-height: 1.35; }
+.gcard-sub { font-size: 11.5px; color: var(--ink-3); }
+
+/* five tabs now share the rail head */
+.rail-tab { font-size: 11.5px; padding-left: 0; padding-right: 0; }
+
+/* guidance grouped by part on a heavily-interpreted provision */
+.gl-group { border-bottom: 1px solid var(--rule-2); }
+.gl-group:last-child { border-bottom: 0; }
+.gl-group-btn {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  background: none; border: 0; cursor: pointer;
+  padding: 8px 4px; text-align: left;
+}
+.gl-group-btn:hover .gl-group-name { color: var(--ink); }
+.gl-group-name { font-size: 13px; font-weight: 500; color: var(--ink-2); flex: 1; }
+.gl-group-n { font-family: var(--mono); font-size: 10.5px; color: var(--ink-3); }
+.gl-group .chap-caret { width: 12px; height: 12px; fill: none; stroke: var(--ink-3); stroke-width: 2; transition: transform .15s; }
+.gl-group.is-open .chap-caret { transform: rotate(90deg); }
+.gl-group-list { display: none; padding: 0 0 8px 6px; }
+.gl-group.is-open .gl-group-list { display: block; }

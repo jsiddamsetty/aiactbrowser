@@ -165,6 +165,50 @@ class Renderer:
                 escape_attr(st["mark"]), escape_attr(st.get("op", "")))
         return ""
 
+    # A numbered paragraph opens a <section>; these are the blocks that read as
+    # its later subparagraphs and belong inside it.
+    SUBPARA = ('<p class="doc-p"', '<div class="point"', '<p class="doc-deleted"')
+
+    PARA_MARK = re.compile(
+        r'^(<section class="para"[^>]*?)( data-chg="[^"]*" data-op="[^"]*")>')
+
+    # a block the amending act left alone carries no data-chg on its opening tag
+    UNMARKED = re.compile(r'<(?:p class="doc-p"|div class="point"|h4 class="doc-h")>')
+
+    @staticmethod
+    def settle_mark(section):
+        """A paragraph's own mark records the amendment in force where the
+        paragraph opened, which over-claims when only part of it was rewritten.
+        Where the paragraph also holds untouched text, push the mark down onto
+        the blocks that carry the new wording."""
+        m = Renderer.PARA_MARK.match(section)
+        if not m:
+            return section
+        body = section[m.end():]
+        if not Renderer.UNMARKED.search(body):
+            return section
+        if "data-chg=" not in body:
+            body = body.replace('<p class="doc-p"', '<p class="doc-p"' + m.group(2), 1)
+        return m.group(1) + ">" + body
+
+    @staticmethod
+    def fold_subparas(parts):
+        """A paragraph whose subparagraphs come from different amendments is
+        split across sibling <div class="norm"> blocks in the export, because
+        each ▼ marker starts a new one. Put those subparagraphs back inside the
+        paragraph they belong to."""
+        out = []
+        for part in parts:
+            if (out and out[-1].endswith("</section>")
+                    and out[-1].startswith('<section class="para"')
+                    and part.startswith(Renderer.SUBPARA)
+                    and '<section class="para"' not in part):
+                out[-1] = out[-1][:-len("</section>")] + part + "</section>"
+            else:
+                out.append(part)
+        return [Renderer.settle_mark(p) if p.startswith('<section class="para"') else p
+                for p in out]
+
     def blocks(self, container):
         parts = []
         for child in container.children:
@@ -185,7 +229,7 @@ class Renderer:
                 continue
 
             parts.append(self.block(child))
-        return "".join(parts)
+        return "".join(self.fold_subparas(parts))
 
     def deleted(self):
         return ('<p class="doc-deleted"%s>Passage deleted by the %s</p>'

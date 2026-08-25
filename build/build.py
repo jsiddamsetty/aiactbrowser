@@ -40,6 +40,7 @@ from parse import (
     ROMAN, article_refs, annex_refs, derive_recital_links, build_edges,
 )
 from parse_consolidated import AMENDER, norm_ws, parse_consolidated
+from parse_guidelines import parse_guidelines
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -188,12 +189,17 @@ def main():
 
     all_recitals = recitals + omni_recitals
 
-    nodes = articles + all_recitals + annexes + definitions
+    # The Commission guidelines that interpret Article 5 and Article 6.
+    print("reading the guidelines…")
+    guidance, guidance_docs = parse_guidelines()
+
+    nodes = articles + all_recitals + annexes + definitions + guidance
     by_id = {n["id"]: n for n in nodes}
 
     # ---- edges -----------------------------------------------------------
     print("linking…")
     edges = build_edges(by_id, articles, all_recitals, annexes, definitions)
+    edges.extend(guidance_edges(guidance, definitions, by_id))
 
     # Recital -> provision, for both preambles.
     seen = {(e["s"], e["t"], e["k"]) for e in edges}
@@ -229,6 +235,7 @@ def main():
                 "omnibusRecitals": len(omni_recitals),
                 "annexes": len(annexes),
                 "definitions": len(definitions),
+                "guidance": len(guidance),
                 "edges": len(edges),
                 "changed": len(changed),
             },
@@ -238,6 +245,8 @@ def main():
         "recitals": all_recitals,
         "annexes": annexes,
         "definitions": definitions,
+        "guidance": guidance,
+        "guidanceDocs": guidance_docs,
         "footnotes": current["footnotes"],
         "edges": edges,
     }
@@ -250,6 +259,68 @@ def main():
     write(os.path.join(DATA, "changes.json"), changes)
 
     report(doc, changes, original)
+
+
+RECITAL_REF = re.compile(r"\b[Rr]ecitals?\s+(\d{1,3})\b")
+
+
+def guidance_edges(guidance, definitions, by_id):
+    """Edges for the guidance layer.
+
+    'interprets' is the editorial mapping — what a section is about — and
+    drives the guidance block on a provision's page. Literal mentions of
+    articles, annexes and recitals in the section text become ordinary
+    'cites'/'annex' edges, so guidance takes part in the citation graph on
+    the same terms as everything else.
+    """
+    by_term = {d["term"]: d["id"] for d in definitions}
+    edges, seen = [], set()
+
+    def add(src, dst, kind):
+        if dst not in by_id or (src, dst, kind) in seen:
+            return
+        seen.add((src, dst, kind))
+        edges.append({"s": src, "t": dst, "k": kind, "w": 1})
+
+    for g in guidance:
+        for t in g.pop("targets", []):
+            if t.startswith("term:"):
+                dst = by_term.get(t[5:])
+                if dst is None:
+                    print("WARN guidance target %r not in Article 3" % t)
+                    continue
+                add(g["id"], dst, "interprets")
+            else:
+                add(g["id"], t, "interprets")
+        # The guidelines cite other instruments constantly — "Article 4(4)
+        # of Regulation (EU) 2016/679" is the GDPR, not the Act — so a
+        # reference only counts when it is not deflected to another act.
+        for ref, end in guarded_refs(ART_ONLY, g["text"]):
+            if (g["id"], "art_" + ref, "interprets") not in seen:
+                add(g["id"], "art_" + ref, "cites")
+        for ref, end in guarded_refs(ANX_ONLY, g["text"]):
+            if (g["id"], "anx_" + ref, "interprets") not in seen:
+                add(g["id"], "anx_" + ref, "annex")
+        for m in RECITAL_REF.finditer(g["text"]):
+            if not OTHER_ACT.match(g["text"][m.end():m.end() + 60]):
+                add(g["id"], "rct_%d" % int(m.group(1)), "cites")
+
+    return edges
+
+
+ART_ONLY = re.compile(r"\bArticles?\s+(\d{1,3})[a-z]?\b")
+ANX_ONLY = re.compile(r"\bAnnex(?:es)?\s+(X{0,3}(?:IX|IV|V?I{0,3}))\b")
+OTHER_ACT = re.compile(
+    r"^\s*(?:\(\d+\)|\([a-z]+\)|,|first|second|third|fourth|subparagraph|"
+    r"point|and|or|to|\d{1,3}|\s)*of\s+(?:Regulation|Directive|Decision|"
+    r"the\s+Charter|the\s+Treaty|Council)")
+
+
+def guarded_refs(pattern, text):
+    for m in pattern.finditer(text):
+        if OTHER_ACT.match(text[m.end():m.end() + 60]):
+            continue
+        yield m.group(1), m.end()
 
 
 def build_changes(original, current, omni_recitals, edges):
@@ -356,6 +427,7 @@ def report(doc, changes, original):
     print("recitals    %d  + %d from the amending act" % (c["recitals"], c["omnibusRecitals"]))
     print("annexes     %d  (%d in the original)" % (c["annexes"], len(original["annexes"])))
     print("definitions %d" % c["definitions"])
+    print("guidance    %d sections" % c["guidance"])
     print("edges       %d" % c["edges"])
     cc = changes["meta"]["counts"]
     print("changes     %d  (%d inserted · %d amended · %d removed)"

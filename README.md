@@ -33,9 +33,13 @@ data/changes.json             the 2026 redlines — fetched only on /changes
 build/build.py                the entry point: sources -> both JSON files
 build/parse.py                reader for Official Journal (fmx) markup
 build/parse_consolidated.py   reader for consolidated (clg) markup
+build/parse_guidelines.py     reader for the Commission guidelines (PDF)
 build/source-oj.html          Regulation (EU) 2024/1689 as first published
 build/source-consolidated.html  the same Act, consolidated to 27.07.2026
 build/source-omnibus.html     Regulation (EU) 2026/1744, the amending act
+build/source-guidelines-prohibited.pdf           C(2025) 5052 final (adopted)
+build/source-guidelines-highrisk-principles.pdf  ┐ draft Art. 6 guidelines,
+build/source-guidelines-highrisk-annex3.pdf      ┘ consultation version
 ```
 
 ## Data
@@ -48,7 +52,8 @@ Everything is parsed from official EUR-Lex exports. Nothing is hand-typed.
 | Recitals | 180 &nbsp;*(+ 47 from the amending act)* |
 | Annexes | 14 &nbsp;*(13 original + Annex XIV)* |
 | Defined terms (Article 3) | 68 |
-| Connections | ~2 550 |
+| Guidance sections | 178 &nbsp;*(110 prohibited practices + 68 high-risk)* |
+| Connections | ~3 100 |
 | Provisions changed in 2026 | 46 |
 
 Three sources, two different markups. The consolidated export uses EUR-Lex's
@@ -60,7 +65,7 @@ come from the Act as first published.
 Regenerate after changing a parser:
 
 ```sh
-python3 -m pip install beautifulsoup4     # only build-time dependency
+python3 -m pip install beautifulsoup4 pypdf   # build-time dependencies
 python3 build/build.py
 ```
 
@@ -98,6 +103,35 @@ Spot-checks line up with the editorial mappings on artificialintelligenceact.eu
 
 Treat the topical matches as a research aid, not an authority. The literal
 citations and the text itself are exact.
+
+## The guidance layer
+
+Two sets of Commission guidelines are parsed in whole and attached to the
+provisions they interpret:
+
+- **Guidelines on prohibited AI practices** (Article 5) — C(2025) 5052 final,
+  adopted 29 July 2025;
+- **Draft guidelines on the classification of high-risk AI systems**
+  (Article 6 / Annex III) — the stakeholder-consultation version, clearly
+  badged *draft* throughout the UI.
+
+Each numbered section of a guideline document is one node, keyed the way the
+Commission cites it ("§ 2.7.1"), with its numbered paragraphs, worked-example
+boxes and footnotes preserved. Sections appear in the reader under a
+**Commission guidance** block on the provisions they interpret (Article 5,
+Article 6, Annex III, and the Article 3 terms they turn on), in the citation
+graph, in search, and as a fifth tab in the contents rail. Literal mentions of
+articles, annexes and recitals inside a guidance section become ordinary graph
+edges — references deflected to other instruments ("Article 4(4) of Regulation
+(EU) 2016/679") are recognised and left unlinked.
+
+The only non-HTML source: these exist solely as PDFs, so
+`build/parse_guidelines.py` recovers structure from typography (body text,
+bold headings, 10pt footnotes, superscript markers) and re-spaces words from
+each font's `/Widths` table. Section titles are taken from each document's own
+contents pages, which are authoritative where the body typography is not.
+Guidelines are not binding, and the drafts will change on adoption — the
+reader says so on every guidance page.
 
 ## The changes page
 
