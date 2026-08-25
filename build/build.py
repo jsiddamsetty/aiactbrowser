@@ -37,7 +37,8 @@ from bs4 import BeautifulSoup
 
 import parse as oj
 from parse import (
-    ROMAN, article_refs, annex_refs, derive_recital_links, build_edges,
+    ROMAN, article_refs, annex_refs, deflected, derive_recital_links,
+    build_edges,
 )
 from parse_consolidated import AMENDER, norm_ws, parse_consolidated
 from parse_guidelines import parse_guidelines
@@ -293,34 +294,19 @@ def guidance_edges(guidance, definitions, by_id):
             else:
                 add(g["id"], t, "interprets")
         # The guidelines cite other instruments constantly — "Article 4(4)
-        # of Regulation (EU) 2016/679" is the GDPR, not the Act — so a
-        # reference only counts when it is not deflected to another act.
-        for ref, end in guarded_refs(ART_ONLY, g["text"]):
-            if (g["id"], "art_" + ref, "interprets") not in seen:
-                add(g["id"], "art_" + ref, "cites")
-        for ref, end in guarded_refs(ANX_ONLY, g["text"]):
-            if (g["id"], "anx_" + ref, "interprets") not in seen:
-                add(g["id"], "anx_" + ref, "annex")
+        # of Regulation (EU) 2016/679" is the GDPR, not the Act — and
+        # article_refs/annex_refs drop any reference deflected to another act.
+        for ref in article_refs(g["text"]):
+            if (g["id"], ref, "interprets") not in seen:
+                add(g["id"], ref, "cites")
+        for ref in annex_refs(g["text"]):
+            if (g["id"], ref, "interprets") not in seen:
+                add(g["id"], ref, "annex")
         for m in RECITAL_REF.finditer(g["text"]):
-            if not OTHER_ACT.match(g["text"][m.end():m.end() + 60]):
+            if not deflected(g["text"][m.end():]):
                 add(g["id"], "rct_%d" % int(m.group(1)), "cites")
 
     return edges
-
-
-ART_ONLY = re.compile(r"\bArticles?\s+(\d{1,3})[a-z]?\b")
-ANX_ONLY = re.compile(r"\bAnnex(?:es)?\s+(X{0,3}(?:IX|IV|V?I{0,3}))\b")
-OTHER_ACT = re.compile(
-    r"^\s*(?:\(\d+\)|\([a-z]+\)|,|first|second|third|fourth|subparagraph|"
-    r"point|and|or|to|\d{1,3}|\s)*of\s+(?:Regulation|Directive|Decision|"
-    r"the\s+Charter|the\s+Treaty|Council)")
-
-
-def guarded_refs(pattern, text):
-    for m in pattern.finditer(text):
-        if OTHER_ACT.match(text[m.end():m.end() + 60]):
-            continue
-        yield m.group(1), m.end()
 
 
 def build_changes(original, current, omni_recitals, edges):

@@ -477,45 +477,94 @@ def parse_definitions(soup, footnotes):
 # ------------------------------------------------------ reference extraction
 
 ART_RE = re.compile(
-    r"\bArticles?\s+(\d{1,3})"
-    r"((?:\s*(?:,|and|to|or)\s*\d{1,3})*)",
+    r"\bArticles?\s+(\d{1,3}[a-z]?)\b"
+    r"((?:\s*(?:,|and|to|or|[-–])\s*\d{1,3}[a-z]?\b)*)",
     re.I,
 )
-ANX_RE = re.compile(r"\bAnnexes?\s+(%s)((?:\s*(?:,|and|to|or)\s*%s)*)\b" % (ROMAN_RE, ROMAN_RE))
+# ROMAN_RE can match the empty string, which lets the reference tail swallow
+# the "to"/"of" the deflection guard needs to see; annex references use this
+# non-empty form instead (the Act has Annexes I–XIV).
+ROMAN_NE = r"(?:XIV|XIII|XII|XI|X|IX|VIII|VII|VI|V|IV|III|II|I)"
+ANX_RE = re.compile(
+    r"\bAnnex(?:es)?\s+(%s)\b((?:\s*(?:,|and|to|or)\s*%s\b)*)" % (ROMAN_NE, ROMAN_NE))
+
+# "Article 4(4) of Regulation (EU) 2016/679" is the GDPR, not this Act: a
+# reference only counts when the text that follows does not deflect it to
+# another instrument. Three cases:
+#   - a named instrument ("of Regulation (EU) 2016/679", "to Directive …",
+#     "of the Charter") is another act, unless the name is Regulation (EU)
+#     2024/1689 — the Act referring to itself by number;
+#   - the Commission guidelines cite other acts by trailing abbreviation
+#     ("Article 35 GDPR", "Articles 5 to 9 UCPD", "Article 47 (Charter)");
+#     "AI"(Act) and the "AIA"/"AIP" codes of Annex XIV are the Act itself
+#     and are deliberately absent from the list;
+#   - "of that Regulation" / "thereof" point at the instrument named last,
+#     which in the Act's own text is always another act, but in the amending
+#     act's recitals is the Act being amended (amending=True keeps those).
+# "Articles?" sits in the noise class so that in a conjoined citation like
+# "Article 14(4) and Article 16(3) of Regulation (EU) 2019/1020" the first
+# reference sees past the second to the instrument that owns them both.
+DEFLECT_RE = re.compile(
+    r"^(?:\(\d+\)|\([a-z]+\)|,|first|second|third|fourth|subparagraph|"
+    r"points?|and|or|to|Articles?|\d{1,3}|\s)*"
+    r"(?:(?:of|to)\s+(?:(?P<that>that)\s+|the\s+[A-Z]{2,8}\s+)?"
+    r"(?:Delegated\s+|Implementing\s+)?"
+    r"(?:Regulation|Directive|Decision|the\s+Charter|the\s+Treaty|Council)"
+    r"|\(?(?P<abbr>TFEU|TEU|GDPR|EUDPR|LED|DSA|DMA|UCPD|CCD|ECHR|CER|Charter)\b"
+    r"|(?P<thereof>thereof))")
+
+SELF_CELEX = "2024/1689"
 
 
-def article_refs(text, self_id=None):
+def deflected(tail, amending=False):
+    """Whether a reference at the start of `tail` belongs to another act."""
+    m = DEFLECT_RE.match(tail[:90])
+    if m is None:
+        return False
+    if m.group("abbr"):
+        return True
+    if m.group("that") or m.group("thereof"):
+        return not amending
+    return SELF_CELEX not in tail[m.end():m.end() + 20]
+
+
+def article_refs(text, self_id=None, amending=False):
     """All 'Article N' / 'Articles N, M and K' targets in a block of text."""
     found = []
     for m in ART_RE.finditer(text):
+        if deflected(text[m.end():], amending):
+            continue
         nums = [m.group(1)]
         tail = m.group(2) or ""
         connector_to = False
-        for tm in re.finditer(r"(,|and|to|or)\s*(\d{1,3})", tail, re.I):
-            if tm.group(1).lower() == "to":
+        for tm in re.finditer(r"(,|and|to|or|[-–])\s*(\d{1,3}[a-z]?)\b", tail, re.I):
+            if tm.group(1).lower() in ("to", "-", "–"):
                 connector_to = True
             nums.append(tm.group(2))
-        ints = [int(n) for n in nums]
+        nums = [n.lower() for n in nums]
         # "Articles 8 to 15" means the whole inclusive range.
-        if connector_to and len(ints) >= 2:
+        if connector_to and len(nums) >= 2 and all(n.isdigit() for n in nums):
+            ints = [int(n) for n in nums]
             expanded = set(ints)
             for a, b in zip(ints, ints[1:]):
                 if b > a and b - a <= 40:
                     expanded.update(range(a, b + 1))
-            ints = sorted(expanded)
-        for n in ints:
-            if 1 <= n <= 113:
-                found.append("art_%d" % n)
+            nums = ["%d" % n for n in sorted(expanded)]
+        for n in nums:
+            if 1 <= int(re.match(r"\d+", n).group()) <= 113:
+                found.append("art_%s" % n)
     if self_id:
         found = [f for f in found if f != self_id]
     return found
 
 
-def annex_refs(text):
+def annex_refs(text, amending=False):
     found = []
     for m in ANX_RE.finditer(text):
+        if deflected(text[m.end():], amending):
+            continue
         romans = [m.group(1)]
-        for tm in re.finditer(r"(?:,|and|to|or)\s*(%s)\b" % ROMAN_RE, m.group(2) or ""):
+        for tm in re.finditer(r"(?:,|and|to|or)\s*(%s)\b" % ROMAN_NE, m.group(2) or ""):
             if tm.group(1):
                 romans.append(tm.group(1))
         for r in romans:
@@ -632,16 +681,17 @@ def build_edges(nodes_by_id, articles, recitals, annexes, definitions):
     for node in list(articles) + list(recitals) + list(annexes) + list(definitions):
         txt = node["text"]
         src = node["id"]
-        for tgt in article_refs(txt, self_id=src):
+        amending = bool(node.get("amending"))
+        for tgt in article_refs(txt, self_id=src, amending=amending):
             add(src, tgt, "cites")
-        for tgt in annex_refs(txt):
+        for tgt in annex_refs(txt, amending=amending):
             add(src, tgt, "annex")
 
     # --- recital -> provision --------------------------------------------
     # Explicit naming first, then derived topical matches for the majority of
     # recitals that never name the article they explain.
     for r in recitals:
-        for tgt in article_refs(r["text"]):
+        for tgt in article_refs(r["text"], amending=bool(r.get("amending"))):
             add(r["id"], tgt, "explains")
     for src, tgt, score in derive_recital_links(recitals, articles, annexes):
         if (src, tgt, "explains") in seen:
