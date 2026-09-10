@@ -263,6 +263,58 @@ button { font: inherit; color: inherit; }
 
 /* ── contents rail ─────────────────────────────────────────── */
 
+/* which document the rail shows: the Act, or one attached to it */
+.doc-pick { position: relative; flex: none; padding: 8px 8px 2px; }
+.doc-pick.is-alone { padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
+.doc-btn {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  background: none; color: var(--ink);
+  border: 1px solid var(--rule); border-radius: 8px;
+  padding: 6px 10px; cursor: pointer; text-align: left;
+}
+.doc-btn:hover, .doc-btn[aria-expanded="true"] { background: var(--sunk); }
+.doc-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.doc-face { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; line-height: 1.3; }
+.doc-face b { font-size: 13px; font-weight: 600; }
+/* the badge drops to its own line rather than cut the subtitle short */
+.doc-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 7px; min-width: 0; }
+.doc-sub i {
+  font-family: var(--mono); font-style: normal;
+  font-size: 10.5px; color: var(--ink-3); letter-spacing: 0.01em;
+  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.doc-sub .gdoc-badge { flex: none; }
+.doc-dot { flex: none; align-self: flex-start; margin-top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.doc-caret {
+  flex: none; width: 12px; height: 12px; transform: rotate(90deg);
+  fill: none; stroke: var(--ink-3); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  transition: transform .15s ease;
+}
+.doc-btn[aria-expanded="true"] .doc-caret { transform: rotate(-90deg); }
+
+.doc-menu {
+  position: absolute; top: calc(100% + 2px); left: 8px; right: 8px;
+  max-height: 70vh; overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  padding: 5px;
+  z-index: 50;
+}
+.doc-group {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3);
+  padding: 9px 8px 4px;
+}
+.doc-menu > :first-child > .doc-group { padding-top: 4px; }
+.doc-opt {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 8px; border-radius: 7px; cursor: pointer;
+}
+.doc-opt:hover, .doc-opt:focus { background: var(--sunk); outline: none; }
+.doc-opt:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
+.doc-opt[aria-selected="true"] .doc-face b { color: var(--accent); }
+
 .rail-tabs {
   display: flex; flex: none;
   padding: 0 8px;
@@ -277,6 +329,7 @@ button { font: inherit; color: inherit; }
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
 }
+.rail-tabs[hidden] { display: none; }
 .rail-tab:hover { color: var(--ink); }
 .rail-tab.is-on { color: var(--ink); border-bottom-color: var(--accent); }
 
@@ -390,6 +443,23 @@ h1.doc-title {
   color: var(--ink-3);
   margin: 0 0 20px;
 }
+
+/* a document home: its name in the other language, then the key facts */
+.doc-alt {
+  font-family: var(--serif); font-style: italic;
+  font-size: 15px; color: var(--ink-2); line-height: 1.45;
+  margin: -12px 0 16px;
+}
+.doc-facts {
+  display: flex; flex-wrap: wrap; gap: 6px 18px;
+  list-style: none; margin: 0 0 8px; padding: 0;
+  font-size: 12.5px; color: var(--ink-3);
+}
+.doc-facts b { color: var(--ink); font-weight: 600; }
+.doc-facts a { color: var(--c-kimig); }
+
+/* part numbers take their document's colour */
+.chapgrid[data-type] .chapcard-n { color: var(--c); }
 
 .meta {
   display: flex; flex-wrap: wrap; gap: 0;
@@ -1161,16 +1231,6 @@ sup.fn:hover { color: var(--accent); }
 }
 .gdoc-badge[data-draft="1"] { color: var(--c-recital); background: var(--c-recital-bg); }
 
-/* contents rail: the two documents head their groups */
-.gdoc-head {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 8px;
-  margin: 14px 6px 6px;
-  font-size: 11px; font-weight: 600; color: var(--ink-2);
-  letter-spacing: 0.02em;
-}
-.gdoc-head:first-child { margin-top: 2px; }
-
 /* a document divider inside the guidance block on a provision page */
 .gdoc-row {
   display: flex; align-items: center; justify-content: space-between;
@@ -1269,10 +1329,6 @@ sup.fn:hover { color: var(--accent); }
 .gcard-title { font-size: 14px; font-weight: 600; color: var(--ink); line-height: 1.35; }
 .gcard-sub { font-size: 11.5px; color: var(--ink-3); }
 
-/* six tabs now share the rail head: size each to its label, spread the rest */
-.rail-tabs { justify-content: space-between; gap: 0; }
-.rail-tab { font-size: 11px; padding-left: 0; padding-right: 0; flex: 0 1 auto; white-space: nowrap; }
-@media (max-width: 1280px) { .rail-tab { font-size: 10.5px; } }
 
 /* guidance grouped by part on a heavily-interpreted provision */
 .gl-group { border-bottom: 1px solid var(--rule-2); }

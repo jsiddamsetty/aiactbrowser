@@ -136,7 +136,7 @@ Commission cites it ("§ 2.7.1"), with its numbered paragraphs, worked-example
 boxes and footnotes preserved. Sections appear in the reader under a
 **Commission guidance** block on the provisions they interpret (Article 5,
 Article 6, Annex III, and the Article 3 terms they turn on), in the citation
-graph, in search, and as a fifth tab in the contents rail. Literal mentions of
+graph, in search, and each as its own document in the contents rail. Literal mentions of
 articles, annexes and recitals inside a guidance section become ordinary graph
 edges — references deflected to other instruments ("Article 4(4) of Regulation
 (EU) 2016/679") are recognised and left unlinked.
@@ -157,8 +157,8 @@ German law that gives the Act effect nationally: it names the
 Bundesnetzagentur as market surveillance authority, sets up the KI-Reallabor
 (sandbox), and adds fines. Its 20 sections (`#/kimig/15`) are read from the
 gesetze-im-internet.de XML export and shown **in English by default, with an
-English | Deutsch toggle to the original German** on every section, with a
-sixth tab in the contents rail, a *National implementation* card on the home
+English | Deutsch toggle to the original German** on every section, with its
+own document in the contents rail, a *National implementation* card on the home
 page, and a **German implementing law** block on every provision of the Act a
 section cites — Article 70, for instance, lists KI-MIG § 1 and § 6.
 
@@ -269,6 +269,18 @@ of EUR-Lex source documents and the parsers out of the deployment. Pushing to
 ## Interface notes
 
 - `/` focuses search · `g` opens the graph · `Esc` closes overlays
+- The contents rail shows one document at a time, picked from the menu at its
+  top: the AI Act (with Articles · Recitals · Annexes · Terms tabs), each
+  Commission guideline, or the KI-MIG. It follows the reader — opening a
+  KI-MIG section switches it to the KI-MIG — and remembers the Act's tab while
+  another document is showing. A new corpus is one more menu entry
+  (`docList()` in `app.js`), not another tab
+- Each attached document has its own home page — `#/guidance/pp`,
+  `#/guidance/hr`, `#/kimig` — reached from its name in the breadcrumb of any
+  of its sections and from the cards on the Act's home page. It lists the
+  document's parts, what it interprets (guidelines) or which provisions of the
+  Act it cites and from which sections (KI-MIG), and the rail graph shows the
+  document with everything it links to
 - Click a node to open it; drag to rearrange, scroll to zoom, double-click to refit
 - The rail graph shows 1 or 2 hops around what you are reading; the legend
   chips filter node types and always show how many of each type are *there*,

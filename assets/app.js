@@ -160,11 +160,26 @@
       return { kind: "graph", focus: gf && N[gf] ? gf : null };
     }
     if (bits[0] === "changes") return { kind: "changes", focus: bits[1] || null };
+    // A document's own home page: #/kimig, #/guidance/pp. Section ids always
+    // carry a number (pp-2.3), so a bare slug never collides with one.
+    if (bits[0] === "kimig" && !bits[1] && DATA.kimig && DATA.kimig.length) return { kind: "doc", doc: "kimig" };
+    if (bits[0] === "guidance" && bits[1] && guidanceDoc(bits[1])) return { kind: "doc", doc: "gdl-" + bits[1] };
     var pref = ROUTE_TO_ID[bits[0]];
     if (!pref || !bits[1]) return { kind: "home" };
     var id = pref + decodeURIComponent(bits[1]);
     if (!N[id]) return { kind: "home" };
     return { kind: "node", id: id, para: bits[2] || null };
+  }
+
+  function docRoute(doc) {
+    return doc === "kimig" ? "#/kimig" : "#/guidance/" + doc.slice(4);
+  }
+
+  /* The hash that reopens a route — where closing the graph overlay returns. */
+  function hashOf(route) {
+    if (!route) return "#/";
+    if (route.kind === "doc") return docRoute(route.doc);
+    return route.id ? routeOf(route.id) : "#/";
   }
 
   function go(hash) {
@@ -182,7 +197,7 @@
         state.route = { kind: "node", id: r.focus };
         renderNode(N[r.focus], null);
         renderGraphFor(r.focus);
-        showTocTab(TAB_FOR[N[r.focus].type]);
+        followToc(N[r.focus]);
         markToc(r.focus);
       } else if (!state.route) {
         state.route = { kind: "home" };
@@ -208,10 +223,17 @@
       el.conn.innerHTML = "";
       markToc(null);
       document.title = "AI Act Browser — Regulation (EU) 2024/1689";
+    } else if (r.kind === "doc") {
+      renderDocHome(r.doc);
+      renderGraphFor(null);
+      el.conn.innerHTML = "";
+      showInToc(r.doc, tocTab);
+      markToc(null);
+      document.title = docTitle(r.doc) + " — AI Act Browser";
     } else {
       renderNode(N[r.id], r.para);
       renderGraphFor(r.id);
-      showTocTab(TAB_FOR[N[r.id].type]);
+      followToc(N[r.id]);
       markToc(r.id);
       document.title = N[r.id].label + " — AI Act Browser";
     }
@@ -221,33 +243,168 @@
 
   /* ── contents rail ────────────────────────────────────────── */
 
-  var tocTab = "act";
-  var TAB_FOR = { article: "act", recital: "recitals", annex: "annexes", definition: "defs", guidance: "guidance", kimig: "kimig" };
+  /* The rail shows one document at a time: the Act, split into its parts by
+     the tabs, or one of the documents attached to it. tocTab is remembered
+     while another document is showing, so coming back lands where you were. */
+  var tocDoc = "aia", tocTab = "act";
+  var TAB_FOR = { article: "act", recital: "recitals", annex: "annexes", definition: "defs" };
 
-  /* Follow the reader: opening a recital switches the rail to the recital list. */
-  function showTocTab(tab) {
-    if (!tab || tab === tocTab) return;
-    var btn = document.querySelector('.rail-tab[data-tab="' + tab + '"]');
-    if (btn) btn.click();
+  function docList() {
+    var km = DATA.kimigMeta || {};
+    var list = [{ id: "aia", group: "Regulation", type: "article",
+                  name: "AI Act", sub: "Regulation (EU) 2024/1689" }];
+    (DATA.guidanceDocs || []).forEach(function (d) {
+      list.push({ id: "gdl-" + d.slug, group: "Commission guidance", type: "guidance",
+                  name: d.name, sub: d.draft ? "Draft guidelines" : "Guidelines",
+                  badge: d.draft ? "draft" : "adopted", draft: d.draft });
+    });
+    if (DATA.kimig && DATA.kimig.length) {
+      list.push({ id: "kimig", group: "National implementation", type: "kimig",
+                  name: km.abbr || "KI-MIG", sub: "German implementing law", badge: "in force" });
+    }
+    return list;
+  }
+
+  function docTitle(doc) {
+    if (doc === "kimig") return (DATA.kimigMeta || {}).abbr || "KI-MIG";
+    var d = guidanceDoc(doc.slice(4));
+    return d ? d.title : doc;
+  }
+
+  function docOf(n) {
+    if (n.type === "guidance") return "gdl-" + n.doc;
+    if (n.type === "kimig") return "kimig";
+    return "aia";
+  }
+
+  /* Follow the reader: opening a recital switches the rail to the recital
+     list, opening a KI-MIG section to the KI-MIG. */
+  function followToc(n) { showInToc(docOf(n), TAB_FOR[n.type] || tocTab); }
+
+  function showInToc(doc, tab) {
+    if (doc === tocDoc && tab === tocTab) return;
+    tocDoc = doc; tocTab = tab;
+    syncRailHead();
+    paintToc();
   }
 
   function buildToc() {
-    document.querySelectorAll(".rail-tab").forEach(function (b) {
+    el.docBtn = $("#doc-btn"); el.docMenu = $("#doc-menu"); el.railTabs = $("#rail-tabs");
+
+    el.railTabs.querySelectorAll(".rail-tab").forEach(function (b) {
       b.addEventListener("click", function () {
-        document.querySelectorAll(".rail-tab").forEach(function (x) { x.classList.remove("is-on"); });
-        b.classList.add("is-on");
         tocTab = b.dataset.tab;
+        syncRailHead();
         paintToc();
         markToc(state.route && state.route.id);
       });
     });
+
+    el.docBtn.addEventListener("click", function () {
+      if (el.docMenu.hidden) openDocMenu(); else closeDocMenu(false);
+    });
+    el.docBtn.addEventListener("keydown", function (ev) {
+      if (ev.key === "ArrowDown" || ev.key === "ArrowUp") { ev.preventDefault(); openDocMenu(); }
+    });
+    el.docMenu.addEventListener("keydown", docMenuKey);
+    el.docMenu.addEventListener("click", function (ev) {
+      var o = ev.target.closest(".doc-opt");
+      if (o) chooseDoc(o.dataset.doc);
+    });
+    document.addEventListener("click", function (ev) {
+      if (!el.docMenu.hidden && !ev.target.closest("#doc-pick")) closeDocMenu(false);
+    });
+
+    syncRailHead();
     paintToc();
+  }
+
+  function docFace(d) {
+    return '<span class="doc-dot" data-type="' + d.type + '"></span>' +
+      '<span class="doc-face"><b>' + esc(d.name) + '</b><span class="doc-sub"><i>' + esc(d.sub) + "</i>" +
+      (d.badge ? '<span class="gdoc-badge" data-draft="' + (d.draft ? "1" : "0") + '">' +
+        esc(d.badge) + "</span>" : "") + "</span></span>";
+  }
+
+  function syncRailHead() {
+    var d = docList().filter(function (x) { return x.id === tocDoc; })[0];
+    el.docBtn.innerHTML = docFace(d) +
+      '<svg class="doc-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
+    el.docBtn.setAttribute("aria-label", "Contents of " + d.name + " — choose another document");
+    var act = tocDoc === "aia";
+    el.railTabs.hidden = !act;
+    el.docBtn.parentNode.classList.toggle("is-alone", !act);
+    el.railTabs.querySelectorAll(".rail-tab").forEach(function (b) {
+      var on = b.dataset.tab === tocTab;
+      b.classList.toggle("is-on", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+  }
+
+  function openDocMenu() {
+    var h = "", group = null;
+    docList().forEach(function (d) {
+      if (d.group !== group) {
+        if (group !== null) h += "</div>";
+        group = d.group;
+        h += '<div role="group" aria-label="' + esc(group) + '">' +
+          '<div class="doc-group" aria-hidden="true">' + esc(group) + "</div>";
+      }
+      h += '<div class="doc-opt" role="option" tabindex="-1" data-doc="' + d.id + '"' +
+        ' aria-label="' + esc(d.name + ", " + d.sub + (d.badge ? ", " + d.badge : "")) + '"' +
+        ' aria-selected="' + (d.id === tocDoc) + '">' + docFace(d) + "</div>";
+    });
+    el.docMenu.innerHTML = h + "</div>";
+    el.docMenu.hidden = false;
+    el.docBtn.setAttribute("aria-expanded", "true");
+    el.docMenu.querySelector('[aria-selected="true"]').focus();
+  }
+
+  function closeDocMenu(refocus) {
+    el.docMenu.hidden = true;
+    el.docBtn.setAttribute("aria-expanded", "false");
+    if (refocus) el.docBtn.focus();
+  }
+
+  function chooseDoc(id) {
+    if (id !== tocDoc) {
+      tocDoc = id;
+      syncRailHead();
+      paintToc();
+      markToc(state.route && state.route.id);
+      el.toc.scrollTop = 0;
+    }
+    closeDocMenu(true);
+  }
+
+  function docMenuKey(ev) {
+    var opts = [].slice.call(el.docMenu.querySelectorAll(".doc-opt"));
+    var at = opts.indexOf(document.activeElement);
+    var to = null;
+    if (ev.key === "ArrowDown") to = Math.min(at + 1, opts.length - 1);
+    else if (ev.key === "ArrowUp") to = Math.max(at - 1, 0);
+    else if (ev.key === "Home") to = 0;
+    else if (ev.key === "End") to = opts.length - 1;
+    else if (ev.key === "Enter" || ev.key === " ") {
+      ev.preventDefault();
+      if (at >= 0) chooseDoc(opts[at].dataset.doc);
+      return;
+    } else if (ev.key === "Escape") {
+      // Close the menu only — not the drawer it sits in.
+      ev.preventDefault(); ev.stopPropagation();
+      closeDocMenu(true);
+      return;
+    } else if (ev.key === "Tab") {
+      closeDocMenu(false);
+      return;
+    }
+    if (to !== null) { ev.preventDefault(); opts[to].focus(); }
   }
 
   function paintToc() {
     var h = "";
 
-    if (tocTab === "act") {
+    if (tocDoc === "aia" && tocTab === "act") {
       DATA.chapters.forEach(function (c) {
         var arts = DATA.articles.filter(function (a) { return a.chapter === c.roman; });
         h += '<div class="chap" data-chap="' + c.roman + '">' +
@@ -267,39 +424,30 @@
         });
         h += "</div></div>";
       });
-    } else if (tocTab === "recitals") {
+    } else if (tocDoc === "aia" && tocTab === "recitals") {
       DATA.recitals.forEach(function (r) {
         h += tocLink(r.id, String(r.num), lede(r.text, 70));
       });
-    } else if (tocTab === "annexes") {
+    } else if (tocDoc === "aia" && tocTab === "annexes") {
       DATA.annexes.forEach(function (a) {
         h += tocLink(a.id, a.roman, a.title);
       });
-    } else if (tocTab === "guidance") {
-      // Two documents, each grouped the way its own contents page groups it.
-      (DATA.guidanceDocs || []).forEach(function (d) {
-        var secs = DATA.guidance.filter(function (g) { return g.doc === d.slug; });
-        h += '<div class="gdoc-head"><span class="gdoc-name">' + esc(d.name) + "</span>" +
-          '<span class="gdoc-badge" data-draft="' + (d.draft ? "1" : "0") + '">' +
-          (d.draft ? "draft" : "adopted") + "</span></div>";
-        var seenPart = null, open = "";
-        secs.forEach(function (g) {
-          if (g.part !== seenPart) {
-            if (seenPart !== null) h += "</div></div>";
-            seenPart = g.part;
-            h += '<div class="chap"><button class="chap-btn" type="button">' +
-              '<span class="chap-name">' + esc(g.part) + "</span>" +
-              '<svg class="chap-caret" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>' +
-              "</button>" + '<div class="chap-list">';
-          }
-          h += tocLink(g.id, "§ " + g.sec, g.title);
-        });
-        if (seenPart !== null) h += "</div></div>";
+    } else if (tocDoc.indexOf("gdl-") === 0) {
+      // One guidelines document, grouped the way its own contents page groups it.
+      var slug = tocDoc.slice(4), seenPart = null;
+      DATA.guidance.filter(function (g) { return g.doc === slug; }).forEach(function (g) {
+        if (g.part !== seenPart) {
+          if (seenPart !== null) h += "</div></div>";
+          seenPart = g.part;
+          h += '<div class="chap"><button class="chap-btn" type="button">' +
+            '<span class="chap-name">' + esc(g.part) + "</span>" +
+            '<svg class="chap-caret" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>' +
+            "</button>" + '<div class="chap-list">';
+        }
+        h += tocLink(g.id, "§ " + g.sec, g.title);
       });
-    } else if (tocTab === "kimig") {
-      var km = DATA.kimigMeta || {};
-      h += '<div class="gdoc-head"><span class="gdoc-name">' + esc(km.abbr || "KI-MIG") + "</span>" +
-        '<span class="gdoc-badge" data-draft="0">in force</span></div>';
+      if (seenPart !== null) h += "</div></div>";
+    } else if (tocDoc === "kimig") {
       var de = kimigLang === "de";
       (DATA.kimigParts || []).forEach(function (p) {
         var secs = (DATA.kimig || []).filter(function (s) { return s.part === p.label; });
@@ -379,7 +527,7 @@
         '<div class="gcards">';
       (DATA.guidanceDocs || []).forEach(function (d) {
         var secs = DATA.guidance.filter(function (g) { return g.doc === d.slug; });
-        h += '<button class="gcard" type="button" data-goto="' + (secs[0] ? secs[0].id : "") + '">' +
+        h += '<button class="gcard" type="button" data-route="' + docRoute("gdl-" + d.slug) + '">' +
           '<span class="gcard-top"><span class="gcard-name">' + esc(d.name) + "</span>" +
           '<span class="gdoc-badge" data-draft="' + (d.draft ? "1" : "0") + '">' +
           (d.draft ? "draft" : "adopted") + "</span></span>" +
@@ -401,7 +549,7 @@
         '<span class="block-count">' + DATA.kimig.length + "</span>" +
         '<span class="block-note">linked to the provisions it cites</span></div>' +
         '<div class="gcards">' +
-        '<button class="gcard" type="button" data-kind="kimig" data-goto="' + DATA.kimig[0].id + '">' +
+        '<button class="gcard" type="button" data-kind="kimig" data-route="#/kimig">' +
         '<span class="gcard-top"><span class="gcard-name">' + esc(km.abbr) + " · Germany</span>" +
         '<span class="gdoc-badge" data-draft="0">in force ' + esc(km.inForce) + "</span></span>" +
         '<span class="gcard-title">' + esc(km.titleEn || km.title) + "</span>" +
@@ -422,10 +570,140 @@
     h += "</div></div>";
 
     el.doc.innerHTML = h;
+    wireHome();
+  }
 
+  function wireHome() {
     el.doc.querySelectorAll("[data-goto]").forEach(function (b) {
       b.addEventListener("click", function () { if (b.dataset.goto) go(routeOf(b.dataset.goto)); });
     });
+    el.doc.querySelectorAll("[data-route]").forEach(function (b) {
+      b.addEventListener("click", function () { go(b.dataset.route); });
+    });
+    wireLinks(el.doc);
+  }
+
+  /* ── document home pages ──────────────────────────────────── */
+
+  /* A document's parts, as the Act home lists its chapters. */
+  function partGrid(type, parts) {
+    return '<div class="chapgrid" data-type="' + type + '">' + parts.map(function (p) {
+      return '<button class="chapcard" type="button" data-goto="' + p.first + '">' +
+        '<span class="chapcard-n">' + esc(p.n) + "</span>" +
+        '<span class="chapcard-t"' + (p.lang ? ' lang="' + p.lang + '"' : "") + ">" + esc(p.title) + "</span>" +
+        '<span class="chapcard-c">' + p.count + (p.count === 1 ? " sec." : " secs.") + "</span></button>";
+    }).join("") + "</div>";
+  }
+
+  /* Order provisions the way the Act does: articles, annexes, then terms. */
+  var DOC_ORDER = null;
+  function actOrder(a, b) {
+    if (!DOC_ORDER) {
+      DOC_ORDER = {};
+      ["articles", "recitals", "annexes", "definitions"].forEach(function (c, ci) {
+        DATA[c].forEach(function (n, i) { DOC_ORDER[n.id] = ci * 10000 + i; });
+      });
+    }
+    return (DOC_ORDER[a.id] != null ? DOC_ORDER[a.id] : 1e6) - (DOC_ORDER[b.id] != null ? DOC_ORDER[b.id] : 1e6);
+  }
+
+  /* The provisions a document's sections reach by edges of the given kinds,
+     each with the sections that reach it. */
+  function reach(secs, kinds) {
+    var by = {};
+    secs.forEach(function (s) {
+      OUT[s.id].forEach(function (e) {
+        var t = N[e.t];
+        if (!t || !kinds[e.k] || t.type === s.type) return;
+        var from = by[t.id] || (by[t.id] = []);
+        if (from.indexOf(s) < 0) from.push(s);
+      });
+    });
+    return Object.keys(by).map(function (id) { return { n: N[id], from: by[id] }; })
+      .sort(function (a, b) { return actOrder(a.n, b.n); });
+  }
+
+  function renderDocHome(doc) {
+    el.doc.innerHTML = doc === "kimig" ? kimigHome() : guidanceHome(guidanceDoc(doc.slice(4)));
+    wireHome();
+  }
+
+  function guidanceHome(d) {
+    var secs = DATA.guidance.filter(function (g) { return g.doc === d.slug; });
+    var paras = Math.max.apply(null, secs.map(function (g) { return g.paras ? g.paras[1] : 0; }));
+
+    // The note below names the citation and status, so this line doesn't.
+    var h = '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>Guidance</span>' +
+      "<i>›</i><span>" + esc(d.name) + "</span></nav>" +
+      '<span class="kicker" data-type="guidance">Commission guidance</span>' +
+      '<h1 class="doc-title">' + esc(d.title) + "</h1>" +
+      '<p class="doc-num">' + secs.length + " sections" +
+      (paras > 0 ? " · paras (1)–(" + paras + ")" : "") + "</p>" +
+      guidanceNote(d);
+
+    var parts = [];
+    secs.forEach(function (g) {
+      var p = parts[parts.length - 1];
+      if (!p || p.title !== g.part) parts.push(p = { n: "§ " + g.sec, title: g.part, first: g.id, count: 0 });
+      p.count++;
+    });
+    h += '<div class="block"><div class="block-head"><h2>Parts</h2>' +
+      '<span class="block-count">' + parts.length + "</span></div>" + partGrid("guidance", parts) + "</div>";
+
+    // The editorial mapping — what the Commission set out to interpret.
+    var about = reach(secs, { interprets: 1 });
+    if (about.length) {
+      h += '<div class="block"><div class="block-head"><h2>Interprets</h2>' +
+        '<span class="block-count">' + about.length + "</span>" +
+        '<span class="block-note">the provisions and terms these guidelines explain</span></div>' +
+        '<div class="links">' + about.map(function (x) {
+          return linkRow(x.n, x.from.length + (x.from.length === 1 ? " section" : " sections"));
+        }).join("") + "</div></div>";
+    }
+    return h;
+  }
+
+  function kimigHome() {
+    var km = DATA.kimigMeta || {}, de = kimigLang === "de";
+
+    var h = '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>' +
+      esc(km.abbr || "KI-MIG") + "</span></nav>" +
+      '<span class="kicker" data-type="kimig">German implementing law</span>' +
+      '<h1 class="doc-title"' + (de ? ' lang="de"' : "") + ">" +
+      esc(de ? km.title : km.titleEn || km.title) + "</h1>" +
+      '<p class="doc-num">' + esc(km.abbr || "") + " · " + esc(km.cite || "") + "</p>";
+    if (km.titleEn) {
+      // the name in the other language, so both are always on the page
+      h += '<p class="doc-alt"' + (de ? "" : ' lang="de"') + ">" + esc(de ? km.titleEn : km.title) + "</p>";
+    }
+
+    h += '<ul class="doc-facts">' +
+      (km.adopted ? "<li>Adopted <b>" + esc(km.adopted) + "</b></li>" : "") +
+      (km.inForce ? "<li>In force <b>" + esc(km.inForce) + "</b></li>" : "") +
+      "<li><b>" + DATA.kimig.length + "</b> sections</li>" +
+      (km.translation ? "<li>English (translation) · Deutsch (original text) on every section</li>" : "") +
+      (km.sourceUrl ? '<li><a href="' + esc(km.sourceUrl) + '" target="_blank" rel="noopener">' +
+        "gesetze-im-internet.de ↗</a></li>" : "") +
+      "</ul>";
+
+    var parts = (DATA.kimigParts || []).map(function (p) {
+      var secs = DATA.kimig.filter(function (s) { return s.part === p.label; });
+      return { n: String(p.num), title: de && p.titleDe ? p.titleDe : p.title,
+               lang: de && p.titleDe ? "de" : "", first: secs[0] && secs[0].id, count: secs.length };
+    }).filter(function (p) { return p.count; });
+    h += '<div class="block"><div class="block-head"><h2>Parts</h2>' +
+      '<span class="block-count">' + parts.length + "</span></div>" + partGrid("kimig", parts) + "</div>";
+
+    var cited = reach(DATA.kimig, { cites: 1 });
+    if (cited.length) {
+      h += '<div class="block"><div class="block-head"><h2>Where it meets the Act</h2>' +
+        '<span class="block-count">' + cited.length + "</span>" +
+        '<span class="block-note">provisions of the Act it cites, and from where</span></div>' +
+        '<div class="links">' + cited.map(function (x) {
+          return linkRow(x.n, x.from.map(function (s) { return "§ " + s.key; }).join(", "));
+        }).join("") + "</div></div>";
+    }
+    return h;
   }
 
   /* ── what changed in 2026 ─────────────────────────────────── */
@@ -596,10 +874,11 @@
       h += "</nav>";
     } else if (n.type === "guidance") {
       h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>Guidance</span>' +
-        "<i>›</i><span>" + esc(n.docName) + "</span>" +
+        '<i>›</i><a href="' + docRoute("gdl-" + n.doc) + '">' + esc(n.docName) + "</a>" +
         "<i>›</i><span>" + esc(n.part) + "</span></nav>";
     } else if (n.type === "kimig") {
-      h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>KI-MIG</span>' +
+      h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i><a href="#/kimig">' +
+        esc((DATA.kimigMeta || {}).abbr || "KI-MIG") + "</a>" +
         "<i>›</i><span>" + esc(kField(n, "part") + ": " + kField(n, "partTitle")) + "</span>" +
         (n.sub ? "<i>›</i><span>" + esc(kField(n, "sub") + ": " + kField(n, "subTitle")) + "</span>" : "") +
         "</nav>";
@@ -625,13 +904,7 @@
       h += '<h1 class="doc-title">' + esc(n.title) + "</h1>" +
         '<p class="doc-num">§ ' + esc(n.sec) + " · " + esc(gdoc ? gdoc.title : n.docName) +
         (n.paras ? " · paras (" + n.paras[0] + ")–(" + n.paras[1] + ")" : "") + "</p>";
-      h += '<div class="gl-note" data-draft="' + (n.draft ? "1" : "0") + '">' +
-        (n.draft
-          ? "<b>Draft.</b> Published for stakeholder consultation and not yet adopted — " +
-            "the final guidelines may differ."
-          : "<b>Adopted</b> — " + esc(gdoc ? gdoc.cite : "") + ".") +
-        " Commission guidelines are not binding; only the Court of Justice can " +
-        "interpret the Act authoritatively.</div>";
+      h += guidanceNote(gdoc || { draft: n.draft, cite: "" });
     } else if (n.type === "kimig") {
       var km = DATA.kimigMeta || {};
       var de = inGerman(n);
@@ -715,6 +988,16 @@
     if (n.type === "guidance") return "Commission guidance";
     if (n.type === "kimig") return "German implementing law";
     return "Defined term";
+  }
+
+  function guidanceNote(d) {
+    return '<div class="gl-note" data-draft="' + (d.draft ? "1" : "0") + '">' +
+      (d.draft
+        ? "<b>Draft.</b> Published for stakeholder consultation and not yet adopted — " +
+          "the final guidelines may differ."
+        : "<b>Adopted</b> — " + esc(d.cite) + ".") +
+      " Commission guidelines are not binding; only the Court of Justice can " +
+      "interpret the Act authoritatively.</div>";
   }
 
   function guidanceDoc(slug) {
@@ -842,7 +1125,7 @@
     kimigLang = lang;
     try { sessionStorage.setItem("aiact-kimig-lang", lang); } catch (e) {}
     renderNode(n, null);
-    if (tocTab === "kimig") { paintToc(); markToc(n.id); }
+    if (tocDoc === "kimig") { paintToc(); markToc(n.id); }
     var btn = el.doc.querySelector('[data-lang="' + lang + '"]');
     if (btn) btn.focus();
   }
@@ -1225,6 +1508,17 @@
     if (!mini) return;
     var title = $("#gtitle"), depth = $("#depth");
 
+    var doc = !id && state.route && state.route.kind === "doc" ? state.route.doc : null;
+    if (doc) {
+      // A document's home: its sections and everything they link to.
+      title.textContent = "The document and its links";
+      depth.hidden = true;
+      var dg = docGraph(doc, state.show);
+      mini.setFocus(null).setData(dg.nodes, dg.edges);
+      el.gempty.hidden = dg.nodes.length > 0;
+      updateLegend(docGraph(doc, ALL_TYPES).nodes);
+      return;
+    }
     if (!id) {
       // Nothing is open: the rail shows the Act entire, and hop depth is moot.
       title.textContent = "The whole Act";
@@ -1250,6 +1544,24 @@
     annex: "annexes", definition: "definitions", guidance: "guidance",
     kimig: "kimig"
   };
+
+  function docGraph(doc, show) {
+    var own = doc === "kimig" ? DATA.kimig
+      : DATA.guidance.filter(function (g) { return "gdl-" + g.doc === doc; });
+    var set = {};
+    own.forEach(function (n) {
+      if (show[n.type]) set[n.id] = 1;
+      (OUT[n.id] || []).concat(IN[n.id] || []).forEach(function (e) {
+        var other = e.s === n.id ? e.t : e.s;
+        if (N[other] && show[N[other].type]) set[other] = 1;
+      });
+    });
+    var nodes = Object.keys(set).map(function (i) {
+      return { id: i, type: N[i].type, label: shortLabel(N[i]), title: N[i].title, r: nodeR(i) };
+    });
+    var edges = DATA.edges.filter(function (e) { return set[e.s] && set[e.t]; });
+    return { nodes: nodes, edges: edges };
+  }
 
   function wholeGraph(show) {
     var nodes = [], set = {};
@@ -1387,7 +1699,7 @@
     document.removeEventListener("keydown", escClose);
     tipForNode(null);
     if (!silent && /^#\/graph(\/|$)/.test(location.hash)) {
-      history.replaceState(null, "", state.route && state.route.id ? routeOf(state.route.id) : "#/");
+      history.replaceState(null, "", hashOf(state.route));
     }
   }
 

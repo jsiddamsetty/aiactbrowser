@@ -64,13 +64,16 @@
 
   <!-- ── contents ─────────────────────────────────────────────── -->
   <nav class="rail rail-left" id="toc-rail" aria-label="Contents">
-    <div class="rail-tabs" role="tablist">
-      <button class="rail-tab is-on" data-tab="act"  role="tab">Act</button>
-      <button class="rail-tab" data-tab="recitals"   role="tab">Recitals</button>
-      <button class="rail-tab" data-tab="annexes"    role="tab">Annexes</button>
-      <button class="rail-tab" data-tab="defs"       role="tab">Terms</button>
-      <button class="rail-tab" data-tab="guidance"   role="tab">Guidance</button>
-      <button class="rail-tab" data-tab="kimig"      role="tab" title="KI-MIG — the German implementing law">KI-MIG</button>
+    <div class="doc-pick" id="doc-pick">
+      <button id="doc-btn" class="doc-btn" type="button"
+              aria-haspopup="listbox" aria-expanded="false" aria-controls="doc-menu"></button>
+      <div id="doc-menu" class="doc-menu" role="listbox" aria-label="Documents" hidden></div>
+    </div>
+    <div class="rail-tabs" id="rail-tabs" role="tablist" aria-label="Parts of the Act">
+      <button class="rail-tab is-on" data-tab="act" role="tab" aria-selected="true">Articles</button>
+      <button class="rail-tab" data-tab="recitals"  role="tab" aria-selected="false">Recitals</button>
+      <button class="rail-tab" data-tab="annexes"   role="tab" aria-selected="false">Annexes</button>
+      <button class="rail-tab" data-tab="defs"      role="tab" aria-selected="false">Terms</button>
     </div>
     <div class="rail-body" id="toc"></div>
   </nav>
