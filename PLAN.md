@@ -14,6 +14,16 @@ The portal is a static site (vanilla JS, no build step for the frontend):
 - `build/parse_guidelines.py` — parses the Commission guidelines PDFs into
   `gdl_*` guidance nodes; `GUIDANCE_TARGETS` is a hand-curated editorial
   mapping of guidance sections to the provisions/terms they interpret.
+- `build/parse_kimig.py` — parses the KI-MIG (German implementing law,
+  gesetze-im-internet.de XML) into `kimig_*` section nodes. It is the first
+  second corpus, added before Phase 1, so it rides the single-corpus scheme:
+  its IDs are prefixed `kimig_` (not `kimig:`), it lives inside `aiact.json`,
+  and its citations of the Act are plain `cites` edges. Its `resolve()` is
+  already a small router for **German** citation forms ("Artikel 70 Absatz 1
+  der Verordnung (EU) 2024/1689", "§ 2 Absatz 3", "Artikel 3 Nummer 48" →
+  `def_48`) and the obvious starting point for MaRisk's German patterns in
+  Phase 5. Phase 1 must migrate it: `kimig_2` → `kimig:par_2`, route
+  `#/kimig/2` kept as a redirect.
 - `build/build.py` — assembles `data/aiact.json` (the Act + graph) and
   `data/changes.json` (the Digital Omnibus redlines). Run: `python3 build/build.py`.
 - `assets/app.js` — hash-routed SPA (`#/article/4`, `#/term/52`, `#/graph`…),

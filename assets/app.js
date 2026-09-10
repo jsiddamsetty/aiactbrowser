@@ -13,9 +13,9 @@
   var TERM_BY_KEY = {};
   var SEARCH = [];
 
-  var TYPES = ["article", "recital", "annex", "definition", "guidance"];
-  var ALL_TYPES = { article: true, recital: true, annex: true, definition: true, guidance: true };
-  var TYPE_LABEL = { article: "Articles", recital: "Recitals", annex: "Annexes", definition: "Terms", guidance: "Guidance" };
+  var TYPES = ["article", "recital", "annex", "definition", "guidance", "kimig"];
+  var ALL_TYPES = { article: true, recital: true, annex: true, definition: true, guidance: true, kimig: true };
+  var TYPE_LABEL = { article: "Articles", recital: "Recitals", annex: "Annexes", definition: "Terms", guidance: "Guidance", kimig: "KI-MIG" };
   var KIND_LABEL = {
     cites: "cites", annex: "annex", uses: "defined term",
     explains: "cites", relates: "topical", interprets: "interprets"
@@ -24,8 +24,8 @@
   var state = {
     route: null,
     depth: 1,
-    show: { article: true, recital: true, annex: true, definition: true, guidance: true },
-    ovShow: { article: true, recital: true, annex: true, definition: true, guidance: true },
+    show: { article: true, recital: true, annex: true, definition: true, guidance: true, kimig: true },
+    ovShow: { article: true, recital: true, annex: true, definition: true, guidance: true, kimig: true },
     ovFocus: null,          // provision the expanded graph is centred on
     ovScope: "all",         // "focus" | "all"
     ovDepth: 1
@@ -33,6 +33,21 @@
 
   var el = {};
   var mini = null, full = null;
+
+  /* The KI-MIG reads in English by default, with the German original a click
+     away. The choice lasts for the tab's session only, so a new visit always
+     opens in English. A section with no checked translation only has German. */
+  var kimigLang = "en";
+  try { if (sessionStorage.getItem("aiact-kimig-lang") === "de") kimigLang = "de"; } catch (e) {}
+
+  function inGerman(n) { return n.type === "kimig" && (kimigLang === "de" || n.lang !== "en"); }
+  function kField(n, f) { return inGerman(n) && n[f + "De"] != null ? n[f + "De"] : n[f]; }
+
+  function nodeTitle(n, max) {
+    if (n.type === "definition") return n.term;
+    if (n.type === "kimig") return kField(n, "title");
+    return n.title || lede(n.text, max);
+  }
 
   /* ── boot ─────────────────────────────────────────────────── */
 
@@ -93,7 +108,7 @@
 
   function index() {
     var all = DATA.articles.concat(DATA.recitals, DATA.annexes, DATA.definitions,
-      DATA.guidance || []);
+      DATA.guidance || [], DATA.kimig || []);
     all.forEach(function (n) { N[n.id] = n; OUT[n.id] = []; IN[n.id] = []; });
 
     DATA.edges.forEach(function (e) {
@@ -118,20 +133,22 @@
     SEARCH = all.map(function (n) {
       return {
         id: n.id, type: n.type, label: n.label, title: n.title || "",
-        hay: (n.label + " " + (n.title || "") + " " + n.text).toLowerCase(),
-        text: n.text
+        hay: (n.label + " " + (n.title || "") + " " + (n.titleDe || "") + " " +
+          n.text + " " + (n.textDe || "")).toLowerCase(),
+        text: n.textDe ? n.text + " · " + n.textDe : n.text
       };
     });
   }
 
   /* ── routing ──────────────────────────────────────────────── */
 
-  var ROUTE_TO_ID = { article: "art_", recital: "rct_", annex: "anx_", term: "def_", guidance: "gdl_" };
-  var ID_TO_ROUTE = { art_: "article", rct_: "recital", anx_: "annex", def_: "term", gdl_: "guidance" };
+  var ROUTE_TO_ID = { article: "art_", recital: "rct_", annex: "anx_", term: "def_", guidance: "gdl_", kimig: "kimig_" };
+  var ID_TO_ROUTE = { art_: "article", rct_: "recital", anx_: "annex", def_: "term", gdl_: "guidance", kimig_: "kimig" };
 
   function routeOf(id) {
-    var p = id.slice(0, 4);
-    return "#/" + ID_TO_ROUTE[p] + "/" + id.slice(4);
+    var m = /^[a-z]+_/.exec(id);
+    var p = m && ID_TO_ROUTE[m[0]] ? m[0] : id.slice(0, 4);
+    return "#/" + ID_TO_ROUTE[p] + "/" + id.slice(p.length);
   }
 
   function parseHash() {
@@ -205,7 +222,7 @@
   /* ── contents rail ────────────────────────────────────────── */
 
   var tocTab = "act";
-  var TAB_FOR = { article: "act", recital: "recitals", annex: "annexes", definition: "defs", guidance: "guidance" };
+  var TAB_FOR = { article: "act", recital: "recitals", annex: "annexes", definition: "defs", guidance: "guidance", kimig: "kimig" };
 
   /* Follow the reader: opening a recital switches the rail to the recital list. */
   function showTocTab(tab) {
@@ -279,6 +296,30 @@
         });
         if (seenPart !== null) h += "</div></div>";
       });
+    } else if (tocTab === "kimig") {
+      var km = DATA.kimigMeta || {};
+      h += '<div class="gdoc-head"><span class="gdoc-name">' + esc(km.abbr || "KI-MIG") + "</span>" +
+        '<span class="gdoc-badge" data-draft="0">in force</span></div>';
+      var de = kimigLang === "de";
+      (DATA.kimigParts || []).forEach(function (p) {
+        var secs = (DATA.kimig || []).filter(function (s) { return s.part === p.label; });
+        h += '<div class="chap"><button class="chap-btn" type="button">' +
+          '<span class="chap-num">' + p.num + '</span>' +
+          '<span class="chap-name"' + (de && p.titleDe ? ' lang="de"' : "") + ">" +
+          esc(de && p.titleDe ? p.titleDe : p.title) + '</span>' +
+          '<svg class="chap-caret" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>' +
+          '</button><div class="chap-list">';
+        var seenSub = null;
+        secs.forEach(function (s) {
+          if (s.sub && s.sub !== seenSub) {
+            seenSub = s.sub;
+            h += '<div class="sec-name">' + esc(kField(s, "sub")) + ' · ' +
+              esc(kField(s, "subTitle") || "") + "</div>";
+          }
+          h += tocLink(s.id, "§ " + s.key, kField(s, "title"));
+        });
+        h += "</div></div>";
+      });
     } else {
       DATA.definitions.forEach(function (d) {
         h += tocLink(d.id, String(d.num), d.term);
@@ -347,6 +388,27 @@
           "</button>";
       });
       h += "</div></div>";
+    }
+
+    /* the German implementing law, cited into the Act provision by provision */
+    if (DATA.kimig && DATA.kimig.length) {
+      var km = DATA.kimigMeta || {};
+      var cited = {};
+      DATA.kimig.forEach(function (s) {
+        OUT[s.id].forEach(function (e) { if (N[e.t] && N[e.t].type !== "kimig") cited[e.t] = 1; });
+      });
+      h += '<div class="block"><div class="block-head"><h2>National implementation</h2>' +
+        '<span class="block-count">' + DATA.kimig.length + "</span>" +
+        '<span class="block-note">linked to the provisions it cites</span></div>' +
+        '<div class="gcards">' +
+        '<button class="gcard" type="button" data-kind="kimig" data-goto="' + DATA.kimig[0].id + '">' +
+        '<span class="gcard-top"><span class="gcard-name">' + esc(km.abbr) + " · Germany</span>" +
+        '<span class="gdoc-badge" data-draft="0">in force ' + esc(km.inForce) + "</span></span>" +
+        '<span class="gcard-title">' + esc(km.titleEn || km.title) + "</span>" +
+        '<span class="gcard-sub">' + esc(km.cite) + " · " + DATA.kimig.length + " sections · cites " +
+        Object.keys(cited).length + " provisions of the Act" +
+        (km.translation ? " · in English, with the German original" : "") + "</span>" +
+        "</button></div></div>";
     }
 
     h += '<div class="block"><div class="block-head"><h2>Chapters</h2></div><div class="chapgrid">';
@@ -536,6 +598,11 @@
       h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>Guidance</span>' +
         "<i>›</i><span>" + esc(n.docName) + "</span>" +
         "<i>›</i><span>" + esc(n.part) + "</span></nav>";
+    } else if (n.type === "kimig") {
+      h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>KI-MIG</span>' +
+        "<i>›</i><span>" + esc(kField(n, "part") + ": " + kField(n, "partTitle")) + "</span>" +
+        (n.sub ? "<i>›</i><span>" + esc(kField(n, "sub") + ": " + kField(n, "subTitle")) + "</span>" : "") +
+        "</nav>";
     } else {
       h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>' +
         esc(TYPE_LABEL[n.type]) + "</span></nav>";
@@ -565,15 +632,49 @@
           : "<b>Adopted</b> — " + esc(gdoc ? gdoc.cite : "") + ".") +
         " Commission guidelines are not binding; only the Court of Justice can " +
         "interpret the Act authoritatively.</div>";
+    } else if (n.type === "kimig") {
+      var km = DATA.kimigMeta || {};
+      var de = inGerman(n);
+      h += '<h1 class="doc-title"' + (de ? ' lang="de"' : "") + ">" + esc(kField(n, "title")) + "</h1>" +
+        '<p class="doc-num">§ ' + esc(n.key) + " " + esc(km.abbr || "KI-MIG") +
+        " · " + esc(km.cite || "") + "</p>";
+      if (n.lang === "en") {
+        h += '<div class="seg lang-seg" role="group" aria-label="Language of the text">' +
+          '<button class="seg-btn' + (de ? "" : " is-on") + '" type="button" data-lang="en" aria-pressed="' +
+            !de + '">English (translation)</button>' +
+          '<button class="seg-btn' + (de ? " is-on" : "") + '" type="button" data-lang="de" aria-pressed="' +
+            de + '">Deutsch (original text)</button></div>';
+      }
+      if (n.pinned) {
+        // The fines bite on the Act as first published; say so where the
+        // consolidated text shown behind a link has since been rewritten.
+        var moved = OUT[n.id]
+          .map(function (e) { return N[e.t]; })
+          .filter(function (t) { return t && t.status; });
+        h += '<div class="gl-note" data-kind="kimig"><b>Cites the 2024 text.</b> This section ' +
+          "refers to the Regulation “in der Fassung vom 13. Juni 2024” (in the version of " +
+          "13 June 2024) — as first published. The links open the Act as amended in 2026" +
+          (moved.length
+            ? "; of the provisions cited, " + moved.map(function (t) {
+                return '<a href="#/changes/' + esc(t.id) + '">' + esc(t.label) + "</a>";
+              }).join(", ") + (moved.length === 1 ? " has" : " have") + " changed since."
+            : ", but none of the provisions cited has changed since.") +
+          "</div>";
+      }
     } else {
       h += '<h1 class="doc-title">' + esc(n.title || n.label) + "</h1>";
       if (n.type !== "recital") h += '<p class="doc-num">' + esc(n.label) + "</p>";
     }
 
     /* the text */
-    h += '<div class="lawtext" id="lawtext">' + n.html + "</div>";
+    h += '<div class="lawtext" id="lawtext"' + (inGerman(n) ? ' lang="de"' : "") + ">" +
+      (n.type === "kimig" ? kField(n, "html") : n.html) + "</div>";
 
     el.doc.innerHTML = h;
+
+    el.doc.querySelectorAll("[data-lang]").forEach(function (b) {
+      b.addEventListener("click", function () { setKimigLang(b.dataset.lang, n); });
+    });
 
     decorate($("#lawtext"), n.id);
 
@@ -587,9 +688,13 @@
     /* Commission guidance attached to the provisions it interprets */
     if (n.type === "article" || n.type === "annex" || n.type === "definition") {
       renderGuidanceFor(el.doc, n);
+      renderKimigFor(el.doc, n);
     }
     if (n.type === "guidance") {
       renderGuidanceNav(el.doc, n);
+    }
+    if (n.type === "kimig") {
+      renderKimigNav(el.doc, n);
     }
 
     if (para) {
@@ -608,6 +713,7 @@
     if (n.type === "recital") return "Recital " + n.num;
     if (n.type === "annex") return "Annex " + n.roman;
     if (n.type === "guidance") return "Commission guidance";
+    if (n.type === "kimig") return "German implementing law";
     return "Defined term";
   }
 
@@ -710,6 +816,51 @@
     sec.innerHTML = h;
     root.appendChild(sec);
     wireLinks(sec);
+  }
+
+  /* Where German law picks a provision up: the KI-MIG sections citing it. */
+  function renderKimigFor(root, n) {
+    var ks = IN[n.id]
+      .filter(function (e) { return N[e.s] && N[e.s].type === "kimig"; })
+      .map(function (e) { return N[e.s]; })
+      .sort(function (a, b) { return a.num - b.num; });
+    if (!ks.length) return;
+
+    var sec = document.createElement("section");
+    sec.className = "block";
+    sec.innerHTML = '<div class="block-head"><h2>German implementing law</h2>' +
+      '<span class="block-count">' + ks.length + "</span>" +
+      '<span class="block-note">KI-MIG sections that cite this ' +
+      (n.type === "definition" ? "term" : "provision") + "</span></div>" +
+      '<div class="links">' + ks.map(function (k) { return linkRow(k, ""); }).join("") + "</div>";
+    root.appendChild(sec);
+    wireLinks(sec);
+  }
+
+  function setKimigLang(lang, n) {
+    if (lang === kimigLang) return;
+    kimigLang = lang;
+    try { sessionStorage.setItem("aiact-kimig-lang", lang); } catch (e) {}
+    renderNode(n, null);
+    if (tocTab === "kimig") { paintToc(); markToc(n.id); }
+    var btn = el.doc.querySelector('[data-lang="' + lang + '"]');
+    if (btn) btn.focus();
+  }
+
+  function renderKimigNav(root, n) {
+    var at = DATA.kimig.findIndex(function (s) { return s.id === n.id; });
+    var prev = at > 0 ? DATA.kimig[at - 1] : null;
+    var next = at >= 0 && at < DATA.kimig.length - 1 ? DATA.kimig[at + 1] : null;
+    if (!prev && !next) return;
+    var sec = document.createElement("section");
+    sec.className = "block";
+    sec.innerHTML = '<div class="gl-nav">' +
+      (prev ? '<a class="gl-nav-a" href="' + routeOf(prev.id) + '">← § ' + esc(prev.key) +
+        ' <span>' + esc(lede(kField(prev, "title"), 46)) + "</span></a>" : "<span></span>") +
+      (next ? '<a class="gl-nav-a gl-nav-next" href="' + routeOf(next.id) + '">§ ' + esc(next.key) +
+        ' <span>' + esc(lede(kField(next, "title"), 46)) + "</span> →</a>" : "") +
+      "</div>";
+    root.appendChild(sec);
   }
 
 
@@ -853,7 +1004,7 @@
     if (!n) return "";
     return '<button class="link" type="button" data-id="' + n.id + '">' +
       '<span class="link-id" data-type="' + n.type + '">' + esc(shortLabel(n)) + "</span>" +
-      '<span class="link-title">' + esc(n.type === "definition" ? n.term : (n.title || lede(n.text, 60))) + "</span>" +
+      '<span class="link-title">' + esc(nodeTitle(n, 60)) + "</span>" +
       (kind ? '<span class="link-kind">' + esc(kind) + "</span>" : "") +
       "</button>";
   }
@@ -867,6 +1018,7 @@
     if (n.type === "recital") return (n.amending ? "Omni. " : "Rec. ") + n.num;
     if (n.type === "annex") return "Annex " + n.roman;
     if (n.type === "guidance") return (n.doc === "pp" ? "Proh." : "HR") + " § " + n.sec;
+    if (n.type === "kimig") return "KI-MIG § " + n.key;
     return "Term " + n.num;
   }
 
@@ -891,7 +1043,9 @@
   function decorate(root, selfId) {
     if (!root) return;
     linkifyRefs(root, selfId);
-    linkifyTerms(root, selfId);
+    // The German KI-MIG has none of the Act's English terms to find; its
+    // references to the Act arrive already linked in either language.
+    if (!(N[selfId] && inGerman(N[selfId]))) linkifyTerms(root, selfId);
     root.querySelectorAll(".xref").forEach(function (a) {
       a.addEventListener("mouseenter", function (ev) { tipForNode(N[a.dataset.node], ev); });
       a.addEventListener("mouseleave", function () { tipForNode(null); });
@@ -982,6 +1136,11 @@
     return root;
   }
 
+  // Defined terms that are also everyday words, and the context that marks
+  // the everyday use: "subject (exclusively) to Article 10" is not Article
+  // 3(58)'s 'subject'.
+  var NOT_A_TERM = { subject: /^\s+(?:[a-z]+ly\s+)?to\b/i };
+
   function linkifyTerms(root, selfId) {
     if (!TERM_RE) return;
     var seen = new Map();
@@ -1001,6 +1160,7 @@
         var key = m[1].toLowerCase();
         var d = TERM_BY_KEY[key];
         if (!d || d.id === selfId || done[key]) continue;
+        if (NOT_A_TERM[key] && NOT_A_TERM[key].test(s.slice(m.index + m[0].length))) continue;
         done[key] = 1;
         if (m.index > last) frag.appendChild(document.createTextNode(s.slice(last, m.index)));
         var a = document.createElement("a");
@@ -1024,6 +1184,10 @@
     return Math.max(3.6, Math.min(3.2 + Math.sqrt(d) * 1.15, 13));
   }
 
+  // KI-MIG sections are leaves for the same reason as terms and guidance:
+  // § 3 alone cites nine provisions of the Act.
+  var LEAF_TYPES = { definition: 1, guidance: 1, kimig: 1 };
+
   function neighbourhood(id, depth, show) {
     var keep = {}, frontier = [id];
     keep[id] = 0;
@@ -1039,7 +1203,7 @@
           // 'provider' is used by 161 provisions and a guidance section can
           // cite thirty articles, so hopping through either would drag in
           // most of the Act and call it a neighbourhood.
-          if (N[other].type !== "definition" && N[other].type !== "guidance") next.push(other);
+          if (!LEAF_TYPES[N[other].type]) next.push(other);
         });
       });
       frontier = next;
@@ -1083,7 +1247,8 @@
 
   var COLLECTION = {
     article: "articles", recital: "recitals",
-    annex: "annexes", definition: "definitions", guidance: "guidance"
+    annex: "annexes", definition: "definitions", guidance: "guidance",
+    kimig: "kimig"
   };
 
   function wholeGraph(show) {
@@ -1255,7 +1420,7 @@
     if (tipTimer) { clearTimeout(tipTimer); tipTimer = null; }
     el.tip.innerHTML =
       '<div class="tip-id" style="color:var(--c-' + n.type + ')">' + esc(n.label) + "</div>" +
-      '<div class="tip-title">' + esc(n.type === "definition" ? "‘" + n.term + "’" : (n.title || lede(n.text, 90))) + "</div>" +
+      '<div class="tip-title">' + esc(n.type === "definition" ? "‘" + n.term + "’" : nodeTitle(n, 90)) + "</div>" +
       '<div class="tip-sub">' + (OUT[n.id].length) + " out · " + (IN[n.id].length) + " in</div>";
     el.tip.hidden = false;
     placeTip(ev ? ev.clientX : 0, ev ? ev.clientY : 0);
@@ -1319,7 +1484,7 @@
         var n = N[h.s.id];
         return '<button class="res" type="button" data-i="' + i + '" data-id="' + n.id + '">' +
           '<div class="res-top"><span class="res-id" data-type="' + n.type + '">' + esc(shortLabel(n)) + "</span>" +
-          '<span class="res-title">' + esc(n.type === "definition" ? "‘" + n.term + "’" : (n.title || n.label)) + "</span></div>" +
+          '<span class="res-title">' + esc(n.type === "definition" ? "‘" + n.term + "’" : (nodeTitle(n, 90) || n.label)) + "</span></div>" +
           '<div class="res-snip">' + snippet(h.s.text, words) + "</div></button>";
       }).join("");
       el.results.querySelectorAll(".res").forEach(function (b) {

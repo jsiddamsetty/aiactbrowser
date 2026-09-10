@@ -247,7 +247,8 @@
       recital: css.getPropertyValue("--c-recital").trim(),
       annex: css.getPropertyValue("--c-annex").trim(),
       definition: css.getPropertyValue("--c-definition").trim(),
-      guidance: css.getPropertyValue("--c-guidance").trim()
+      guidance: css.getPropertyValue("--c-guidance").trim(),
+      kimig: css.getPropertyValue("--c-kimig").trim()
     };
     var inkMuted = css.getPropertyValue("--ink-3").trim();
     var ink = css.getPropertyValue("--ink").trim();

@@ -42,6 +42,7 @@ from parse import (
 )
 from parse_consolidated import AMENDER, norm_ws, parse_consolidated
 from parse_guidelines import parse_guidelines
+from parse_kimig import parse_kimig, kimig_edges, apply_translation
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -194,13 +195,20 @@ def main():
     print("reading the guidelines…")
     guidance, guidance_docs = parse_guidelines()
 
-    nodes = articles + all_recitals + annexes + definitions + guidance
+    # The KI-MIG — the German implementing law, from gesetze-im-internet.de.
+    print("reading the KI-MIG…")
+    kimig, kimig_parts, kimig_meta = parse_kimig()
+    # English leads where a checked translation exists; German stays alongside.
+    kimig_en = apply_translation(kimig, kimig_parts, kimig_meta)
+
+    nodes = articles + all_recitals + annexes + definitions + guidance + kimig
     by_id = {n["id"]: n for n in nodes}
 
     # ---- edges -----------------------------------------------------------
     print("linking…")
     edges = build_edges(by_id, articles, all_recitals, annexes, definitions)
     edges.extend(guidance_edges(guidance, definitions, by_id))
+    edges.extend(kimig_edges(kimig, by_id))
 
     # Recital -> provision, for both preambles.
     seen = {(e["s"], e["t"], e["k"]) for e in edges}
@@ -237,10 +245,13 @@ def main():
                 "annexes": len(annexes),
                 "definitions": len(definitions),
                 "guidance": len(guidance),
+                "kimig": len(kimig),
+                "kimigEnglish": kimig_en,
                 "edges": len(edges),
                 "changed": len(changed),
             },
         },
+        "kimigMeta": kimig_meta,
         "chapters": chapters,
         "articles": articles,
         "recitals": all_recitals,
@@ -248,6 +259,8 @@ def main():
         "definitions": definitions,
         "guidance": guidance,
         "guidanceDocs": guidance_docs,
+        "kimig": kimig,
+        "kimigParts": kimig_parts,
         "footnotes": current["footnotes"],
         "edges": edges,
     }
@@ -414,6 +427,8 @@ def report(doc, changes, original):
     print("annexes     %d  (%d in the original)" % (c["annexes"], len(original["annexes"])))
     print("definitions %d" % c["definitions"])
     print("guidance    %d sections" % c["guidance"])
+    print("KI-MIG      %d sections  (%d with an English translation)"
+          % (c["kimig"], c["kimigEnglish"]))
     print("edges       %d" % c["edges"])
     cc = changes["meta"]["counts"]
     print("changes     %d  (%d inserted · %d amended · %d removed)"
@@ -429,6 +444,11 @@ def report(doc, changes, original):
         warn.append("expected 119 articles")
     if c["recitals"] != 180:
         warn.append("expected 180 recitals")
+    if c["kimig"] != 20:
+        warn.append("expected 20 KI-MIG sections")
+    if c["kimigEnglish"] != c["kimig"]:
+        warn.append("%d KI-MIG sections have no valid English translation"
+                    % (c["kimig"] - c["kimigEnglish"]))
     gaps = sorted(set(range(1, 181)) - {r["num"] for r in doc["recitals"]
                                         if not r.get("amending")})
     if gaps:

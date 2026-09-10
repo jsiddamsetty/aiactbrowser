@@ -34,17 +34,21 @@ build/build.py                the entry point: sources -> both JSON files
 build/parse.py                reader for Official Journal (fmx) markup
 build/parse_consolidated.py   reader for consolidated (clg) markup
 build/parse_guidelines.py     reader for the Commission guidelines (PDF)
+build/parse_kimig.py          reader for the KI-MIG (gesetze-im-internet XML)
 build/source-oj.html          Regulation (EU) 2024/1689 as first published
 build/source-consolidated.html  the same Act, consolidated to 27.07.2026
 build/source-omnibus.html     Regulation (EU) 2026/1744, the amending act
 build/source-guidelines-prohibited.pdf           C(2025) 5052 final (adopted)
 build/source-guidelines-highrisk-principles.pdf  ┐ draft Art. 6 guidelines,
 build/source-guidelines-highrisk-annex3.pdf      ┘ consultation version
+build/source-kimig.xml        KI-MIG, BGBl. 2026 I Nr. 223 (German law)
+build/translations/kimig-en/  its unofficial English translation, per section
 ```
 
 ## Data
 
-Everything is parsed from official EUR-Lex exports. Nothing is hand-typed.
+Everything is parsed from official exports — EUR-Lex for the EU texts,
+gesetze-im-internet.de for the KI-MIG. Nothing is hand-typed.
 
 | | |
 |---|---|
@@ -53,6 +57,7 @@ Everything is parsed from official EUR-Lex exports. Nothing is hand-typed.
 | Annexes | 14 &nbsp;*(13 original + Annex XIV)* |
 | Defined terms (Article 3) | 68 |
 | Guidance sections | 178 &nbsp;*(110 prohibited practices + 68 high-risk)* |
+| KI-MIG sections | 20 &nbsp;*(citing 49 provisions of the Act)* |
 | Connections | ~3 100 |
 | Provisions changed in 2026 | 46 |
 
@@ -133,6 +138,78 @@ contents pages, which are authoritative where the body typography is not.
 Guidelines are not binding, and the drafts will change on adoption — the
 reader says so on every guidance page.
 
+## The German implementing law (KI-MIG)
+
+The **Gesetz zur Marktüberwachung und Innovationsförderung von künstlicher
+Intelligenz** (KI-MIG, BGBl. 2026 I Nr. 223, in force 29 July 2026) is the
+German law that gives the Act effect nationally: it names the
+Bundesnetzagentur as market surveillance authority, sets up the KI-Reallabor
+(sandbox), and adds fines. Its 20 sections (`#/kimig/15`) are read from the
+gesetze-im-internet.de XML export and shown **in English by default, with an
+English | Deutsch toggle to the original German** on every section, with a
+sixth tab in the contents rail, a *National implementation* card on the home
+page, and a **German implementing law** block on every provision of the Act a
+section cites — Article 70, for instance, lists KI-MIG § 1 and § 6.
+
+`build/parse_kimig.py` resolves the German citations itself, because the law
+cites the Act, other EU regulations and a long tail of German statutes in the
+same sentences. A reference links only when it is the Act's or the KI-MIG's
+own:
+
+- "Artikel 70 Absatz 1 … der Verordnung (EU) 2024/1689" → Article 70,
+  paragraph 1 (`#/article/70/p1`);
+- "Artikel 3 Nummer 48 der Verordnung (EU) 2024/1689" → the defined term
+  itself (*national competent authority*), not all of Article 3;
+- "entgegen Artikel 21 Absatz 1" in the § 15 fine catalogue, whose lead-in
+  names the Regulation once for the whole list;
+- "§ 2 Absatz 3" → that paragraph of the KI-MIG;
+- anything followed by another instrument — "der Verordnung (EU) 2019/1020",
+  "des Kreditwesengesetzes", "des Grundgesetzes" — stays plain text.
+
+Links and graph edges come from the same resolved spans, so the page and the
+graph cannot disagree. `python3 build/parse_kimig.py` prints what each section
+cites.
+
+### The English translation
+
+The English text is an **unofficial machine translation by Claude Sonnet 5**,
+not reviewed by a lawyer; only the German is authentic. The toggle on each
+section says which is which — *English (translation)*, *Deutsch (original
+text)* — rather than a disclaimer banner. It is a checked-in build input, not generated at build time —
+`build/translations/kimig-en/NN.html` holds each section as an `<h1>` title
+plus the section body in the German's own markup, and `_parts.json` the law's
+title and part headings — so the build stays offline and reproducible, and a
+correction is an ordinary reviewed diff.
+
+The translator was held to the Act's official English terms (*Betreiber* is
+the Act's **deployer**, *KI-Reallabor* its **AI regulatory sandbox**) and EU
+citation style ("Artikel 70 Absatz 1 Satz 1" → "the first sentence of
+Article 70(1)"). Because the English uses the Act's own vocabulary, it also
+picks up the Act's defined-term links, which the German cannot.
+
+Where a rendering is uncertain, the German **noun** follows it in
+parentheses — "registry office (Geschäftsstelle)", "administrative
+assistants (Verwaltungshelfer)" — at its first mention in a section. Only
+terms get this, never whole phrases: the full German is a click away on the
+toggle.
+
+The German remains the source of truth for the graph: edges come from
+resolving the German citations, and `apply_translation()` rejects any English
+section whose links, paragraph ids or point markers differ from the German's
+in any way, falling back to German for it. Check the files with:
+
+```sh
+python3 build/parse_kimig.py --check
+```
+
+Every visit opens in English; switching to German holds for the rest of that
+tab's session. Search matches either language.
+
+§ 15 punishes breaches of the Regulation *"in der Fassung vom 13. Juni 2024"*
+— as first published — while this browser shows the Act as amended. The
+section says so, and names the cited provisions that have changed since
+(Article 27).
+
 ## The changes page
 
 `#/changes` shows what Regulation (EU) 2026/1744 did to the Act: **6 articles
@@ -204,10 +281,15 @@ of EUR-Lex source documents and the parsers out of the deployment. Pushing to
 
 ## Accessibility
 
-The four node-type colours are a categorical palette validated at **all pairs**
-in both light and dark mode for protanopia, deuteranopia and tritanopia
-(worst-case ΔE 13.9 light / 10.8 dark, OKLab ×100), each clearing 3:1 against its
-surface. Colour never carries meaning alone — every node and connection is also
+The four original node-type colours (article, recital, annex, term) are a
+categorical palette validated at **all pairs** in both light and dark mode for
+protanopia, deuteranopia and tritanopia (worst-case ΔE 13.9 light / 10.8 dark,
+OKLab ×100, Machado 2009 simulation), each clearing 3:1 against its surface.
+The KI-MIG ochre/gold (`#7D5800` light / `#FEC748` dark) was chosen by the same
+test against all five existing hues and the ink greys: worst case ΔE 11.5 light
+/ 16.2 dark, text contrast 6.4:1 / 10.7:1. The guidance violet predates that
+check and does not pass it — under protanopia it sits ΔE 1.9 from the article
+blue — so the text labels carry that distinction. Colour never carries meaning alone — every node and connection is also
 labelled in text. Dark mode uses its own validated steps rather than inverted
 light ones.
 
@@ -218,6 +300,10 @@ correct semantics for assistive technology — and prefix each run with `+` or `
 so the distinction survives without colour.
 
 ## Licence
+
+The KI-MIG is a German federal statute and, as an official work, not subject
+to copyright (§ 5 UrhG); it is reproduced from
+[gesetze-im-internet.de](https://www.gesetze-im-internet.de/ki-mig/).
 
 The texts of Regulation (EU) 2024/1689 and Regulation (EU) 2026/1744 are
 © European Union, reproduced from [EUR-Lex](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng);
