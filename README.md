@@ -78,6 +78,17 @@ The script prints counts and warns about gaps (missing article or recital
 numbers, untitled articles), so a broken parse fails loudly rather than shipping
 a half-empty site.
 
+It then lists every connection the build added or dropped since the last
+commit. The sources never change, but the parsers do, and `data/aiact.json` is
+a single line — git would show a parser tweak that drops 250 edges as one
+changed line. Read that list before committing a parser change:
+
+```
+edges       3032 -> 3305 since the last commit
+  cites      -0    +202
+  + art_3            cites     art_4
+```
+
 ### How the connections are derived
 
 Five edge kinds, each labelled in the UI so you can tell evidence from inference:

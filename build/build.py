@@ -28,6 +28,7 @@ import difflib
 import json
 import os
 import re
+import subprocess
 import sys
 from collections import defaultdict
 
@@ -438,6 +439,8 @@ def report(doc, changes, original):
         p = os.path.join(DATA, name)
         print("-> data/%-14s %6.0f KB" % (name, os.path.getsize(p) / 1024.0))
 
+    report_edges(committed_edges(), doc["edges"])
+
     # Loud failures beat a quietly half-empty site.
     warn = []
     if c["articles"] < 119:
@@ -459,6 +462,50 @@ def report(doc, changes, original):
         warn.append("amended with an empty redline: %s" % empty[:6])
     for w in warn:
         print("WARN", w)
+
+
+def committed_edges():
+    """The edges in the last committed data/aiact.json, or None without git."""
+    try:
+        blob = subprocess.run(["git", "show", "HEAD:data/aiact.json"], cwd=ROOT,
+                              capture_output=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return json.loads(blob)["edges"]
+
+
+def natural(key):
+    return [int(p) if p.isdigit() else p for p in re.split(r"(\d+)", key)]
+
+
+def report_edges(old, new, limit=40):
+    """Print the connections this build added or dropped since the last commit.
+
+    The sources never change; the parsers do. data/aiact.json is one line, so
+    git reports a parser change that silently drops 250 edges as '2 +-' — this
+    is the review that diff cannot give.
+    """
+    print()
+    if old is None:
+        print("edges       no committed data/aiact.json to compare with")
+        return
+    edge = lambda e: (e["s"], e["k"], e["t"])
+    order = lambda r: (natural(r[0]), r[1], natural(r[2]))
+    before, after = set(map(edge, old)), set(map(edge, new))
+    gone = sorted(before - after, key=order)
+    came = sorted(after - before, key=order)
+    if not gone and not came:
+        print("edges       unchanged since the last commit")
+        return
+    print("edges       %d -> %d since the last commit" % (len(old), len(new)))
+    for k in sorted({r[1] for r in gone + came}):
+        print("  %-10s -%-4d +%d" % (k, sum(r[1] == k for r in gone),
+                                   sum(r[1] == k for r in came)))
+    for sign, rows in (("-", gone), ("+", came)):
+        for s, k, t in rows[:limit]:
+            print("  %s %-16s %-9s %s" % (sign, s, k, t))
+        if len(rows) > limit:
+            print("  %s … and %d more" % (sign, len(rows) - limit))
 
 
 if __name__ == "__main__":

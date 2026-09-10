@@ -57,11 +57,22 @@ Known limitation to carry forward: bare contextual citations — in
 with no lexical marker — still mislink to the Act. Regex can't fix these;
 Phase 2's per-section override table can.
 
-## Phase 0 — regression tests (do this first, it protects everything after)
+## Phase 0 — regression guard (done: the edge diff, not unit tests)
 
-The deflection fix was verified by hand; nothing stops a regex tweak from
-silently reintroducing the bug. Create `build/test_refs.py` (plain `assert`s
-or pytest) covering at least:
+The sources are fixed documents, so the only thing that regresses is parser
+code. Decided against a `test_refs.py` suite: `build.py` now ends by listing
+every edge added or dropped against the committed `data/aiact.json`
+(`report_edges`), which catches the whole class of bug without hand-written
+cases. Switching the deflection guard off to check it reproduces the original
+profiling bug as `+ art_3 cites art_4` among 273 new edges. Review that list
+before committing any parser change.
+
+Phase 1 renames every ID, so its first build will report all edges as changed.
+Compare with the prefix stripped for that one commit — the list should be
+empty — then carry on as normal.
+
+The citation forms the parsers must keep getting right, worth eyeballing in
+the diff whenever `deflected()`/`article_refs` change:
 
 - `article_refs("… as defined in Article 4, point (4), of Regulation (EU)
   2016/679")` → `[]` (the original profiling bug);
@@ -77,9 +88,6 @@ or pytest) covering at least:
   `["anx_III"]` (the `Annexes?` bug);
 - lettered articles: "Article 4a" → `["art_4a"]`;
 - range expansion still works: "Articles 8 to 15" → 8..15.
-
-Also snapshot-check `build.py` output counts (edges within an expected band)
-so a parser regression is loud.
 
 ## Phase 1 — namespacing refactor (no new content)
 
@@ -102,7 +110,8 @@ Break the single-corpus assumptions before adding a second corpus.
    exists for the AI Act; make it uniform.
 
 Acceptance: site behaves identically for the AI Act; old URLs redirect;
-`python3 build/build.py` still produces valid data; Phase 0 tests pass.
+`python3 build/build.py` still produces valid data; the edge diff, prefixes
+stripped, is empty.
 
 ## Phase 2 — the deflection guard becomes a router; external stubs
 
@@ -242,13 +251,13 @@ Different in kind from the EUR-Lex corpora; budget the most time here.
 
 ## Ordering and effort (rough)
 
-0. Tests — small, do first.
+0. Regression guard — done (edge diff in `build.py`).
 1. Namespacing — medium refactor, touches build + app.js routing.
 2. Router + stubs — medium, mostly `parse.py`/`build.py`, small UI additions.
 3. GDPR — small-medium (parser reuse is high).
 4. DORA — small-medium.
 5. MaRisk/BaFin — large (new parser, language, editorial concordance).
 
-Each phase ends with: `python3 build/build.py` clean, Phase 0 tests green,
-and a browser check of the profiling term (`#/term/52` → after Phase 1,
+Each phase ends with: `python3 build/build.py` clean, its edge diff read and
+every added or dropped edge accounted for, and a browser check of the profiling term (`#/term/52` → after Phase 1,
 `#/aia/term/52`), which has been the canary throughout.
