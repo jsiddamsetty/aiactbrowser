@@ -221,6 +221,7 @@
       renderHome();
       renderGraphFor(null);
       el.conn.innerHTML = "";
+      showInToc("aia", tocTab);
       markToc(null);
       document.title = "AI Act Browser — Regulation (EU) 2024/1689";
     } else if (r.kind === "doc") {
@@ -330,7 +331,7 @@
     var d = docList().filter(function (x) { return x.id === tocDoc; })[0];
     el.docBtn.innerHTML = docFace(d) +
       '<svg class="doc-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
-    el.docBtn.setAttribute("aria-label", "Contents of " + d.name + " — choose another document");
+    el.docBtn.setAttribute("aria-label", "Contents of " + d.name + " — open another document");
     var act = tocDoc === "aia";
     el.railTabs.hidden = !act;
     el.docBtn.parentNode.classList.toggle("is-alone", !act);
@@ -366,15 +367,11 @@
     if (refocus) el.docBtn.focus();
   }
 
+  /* Picking a document opens its home page; render() brings the rail along. */
   function chooseDoc(id) {
-    if (id !== tocDoc) {
-      tocDoc = id;
-      syncRailHead();
-      paintToc();
-      markToc(state.route && state.route.id);
-      el.toc.scrollTop = 0;
-    }
     closeDocMenu(true);
+    if (id !== tocDoc) el.toc.scrollTop = 0;
+    go(id === "aia" ? "#/" : docRoute(id));
   }
 
   function docMenuKey(ev) {

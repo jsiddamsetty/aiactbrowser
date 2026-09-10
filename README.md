@@ -271,7 +271,8 @@ of EUR-Lex source documents and the parsers out of the deployment. Pushing to
 - `/` focuses search · `g` opens the graph · `Esc` closes overlays
 - The contents rail shows one document at a time, picked from the menu at its
   top: the AI Act (with Articles · Recitals · Annexes · Terms tabs), each
-  Commission guideline, or the KI-MIG. It follows the reader — opening a
+  Commission guideline, or the KI-MIG. Picking one opens its home page. The
+  rail follows the reader — opening a
   KI-MIG section switches it to the KI-MIG — and remembers the Act's tab while
   another document is showing. A new corpus is one more menu entry
   (`docList()` in `app.js`), not another tab
