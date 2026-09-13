@@ -28,6 +28,11 @@ The portal is a static site (vanilla JS, no build step for the frontend):
   KI-MIG it rides the single-corpus scheme: `gdpr_4` ids inside `aiact.json`,
   routes `#/gdpr/4`. It runs `parse_consolidated` on the EUR-Lex consolidated
   export. Phase 1 must migrate it too: `gdpr_4` → `gdpr:art_4`.
+- `build/parse_bafin.py` — BaFin's 2026 Guidance on ICT Risks in the Use of AI,
+  a Phase 5 item added early. Its sections are guidance nodes
+  (`gdl_bafin-V.1`) with `act: None`, so their bare references are not taken
+  to be the Act's. Its link to the Act is the first concordance:
+  `CONCORDANCE` → `concords` edges, each carrying a `why`.
 - `build/build.py` — assembles `data/aiact.json` (the Act + graph) and
   `data/changes.json` (the Digital Omnibus redlines). Run: `python3 build/build.py`.
 - `assets/app.js` — hash-routed SPA (`#/article/4`, `#/term/52`, `#/graph`…),
@@ -260,6 +265,10 @@ Different in kind from the EUR-Lex corpora; budget the most time here.
 - **BaFin AI material:** the "Big Data and AI: supervisory principles"
   papers are prose PDFs — model them like the Commission guidelines
   (sections + editorial targets), not like a statute.
+  *Started:* BaFin's Guidance on ICT Risks in the Use of AI (23.01.2026) is
+  in. It uses `concords` edges with reasons rather than editorial targets,
+  because it interprets DORA, not the Act. Its DORA references can link once
+  Phase 4 brings DORA in.
 - **Concordance:** cross-framework links here are editorial, not textual —
   MaRisk rarely cites the AI Act and vice versa. Create
   `build/concordance.py` (or a data file) hand-mapping related requirements,

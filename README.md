@@ -30,12 +30,14 @@ assets/app.js                 routing, reader, search, connections, changes
 assets/graph.js               force-directed canvas graph (no library)
 data/aiact.json               the Act as it now stands — loaded on start
 data/changes.json             the 2026 redlines — fetched only on /changes
+data/bafin/figure-*.png       the BaFin guidance's two figures, written by the build
 build/build.py                the entry point: sources -> both JSON files
 build/parse.py                reader for Official Journal (fmx) markup
 build/parse_consolidated.py   reader for consolidated (clg) markup
 build/parse_guidelines.py     reader for the Commission guidelines (PDF)
 build/parse_kimig.py          reader for the KI-MIG (gesetze-im-internet XML)
 build/parse_gdpr.py           reader for the GDPR (consolidated markup)
+build/parse_bafin.py          reader for BaFin's guidance on ICT risks in AI (PDF)
 build/source-oj.html          Regulation (EU) 2024/1689 as first published
 build/source-consolidated.html  the same Act, consolidated to 27.07.2026
 build/source-omnibus.html     Regulation (EU) 2026/1744, the amending act
@@ -45,6 +47,7 @@ build/source-guidelines-highrisk-annex3.pdf      ┘ consultation version
 build/source-kimig.xml        KI-MIG, BGBl. 2026 I Nr. 223 (German law)
 build/translations/kimig-en/  its unofficial English translation, per section
 build/source-gdpr.html        Regulation (EU) 2016/679, consolidated 04.05.2016
+build/source-bafin-ai.pdf     BaFin, Guidance on ICT Risks in the Use of AI (2026)
 ```
 
 ## Data
@@ -61,6 +64,7 @@ gesetze-im-internet.de for the KI-MIG. Nothing is hand-typed.
 | Guidance sections | 178 &nbsp;*(110 prohibited practices + 68 high-risk)* |
 | KI-MIG sections | 20 &nbsp;*(citing 49 provisions of the Act)* |
 | GDPR articles | 99 &nbsp;*(6 of them cited from the Act's side)* |
+| BaFin guidance sections | 17 &nbsp;*(13 editorial links to requirements of the Act)* |
 | Connections | ~3 400 |
 | Provisions changed in 2026 | 46 |
 
@@ -284,6 +288,47 @@ number. Now neither does.
   of the Act, a GDPR article is a leaf, and the reverse holds too. So a
   neighbourhood stays inside the text you are reading.
 
+## BaFin's guidance on ICT risks in AI
+
+BaFin's **Guidance on ICT Risks in the Use of AI at Financial Entities**
+(version of 23 January 2026, English version) is non-binding advice on
+applying DORA to AI systems at banks and insurers. `build/parse_bafin.py`
+reads its 17 sections (`#/guidance/bafin-V.1`) from the PDF. The document
+gets its own entry under *Supervisory guidance* in the rail menu, a home page
+(`#/guidance/bafin`), and a card on the Act's home page.
+
+The guidance is about DORA, not the AI Act, so it joins the guidance layer on
+different terms from the Commission's guidelines.
+
+- **References stay plain text unless they name the AI Act.** The guidance
+  cites DORA and its technical standards on almost every line: "Article 8 of
+  DORA", "Article 16 of the RTS RMF". DORA is not in the corpus. A reference
+  that names no act is not assumed to be the AI Act's, so only "Article 3(1)
+  of the EU AI Act" links. The deflection guard now also recognises "of
+  DORA", "of the RTS RMF" and a named "AI Act"; no existing connection
+  changed.
+- **What links it to the Act is editorial.** The guidance interprets nothing
+  in the Act, so it has no *interprets* edges. Instead, `CONCORDANCE` in
+  `parse_bafin.py` names the Act's requirements that a section's subject
+  meets, 13 links in all, each with a written reason. Examples: adversarial
+  testing and Article 15(5), data quality and Article 10(3), incident
+  reporting and Article 73. The links appear as **Related requirements in the
+  AI Act** on BaFin sections and as **Supervisory guidance** on the Act's
+  provisions. Each shows its reason and is marked as editorial, never as a
+  citation. Most of these requirements bind only high-risk AI systems, while
+  the guidance covers any AI system a financial entity runs.
+
+The PDF's layout gives the structure:
+
+- parts and sections come from the Cambria heading type;
+- run-in heads come from italics;
+- footnotes are the 8.5pt text at the foot of each page.
+
+Five pages quote a DORA article in a box beside the running text. Each box is
+kept as a quotation after the paragraph it sits beside. The build writes
+Figures 1 and 2 to `data/bafin/`, and they are shown on white in both themes.
+The cover, contents, imprint and index of abbreviations are left out.
+
 ## The changes page
 
 `#/changes` shows what Regulation (EU) 2026/1744 did to the Act: **6 articles
@@ -334,13 +379,13 @@ of EUR-Lex source documents and the parsers out of the deployment. Pushing to
 - `/` focuses search · `g` opens the graph · `Esc` closes overlays
 - The contents rail shows one document at a time, picked from the menu at its
   top: the AI Act (with Articles · Recitals · Annexes · Terms tabs), the GDPR,
-  each Commission guideline, or the KI-MIG. Picking one opens its home page. The
+  each Commission guideline, BaFin's guidance, or the KI-MIG. Picking one opens its home page. The
   rail follows the reader — opening a
   KI-MIG section switches it to the KI-MIG — and remembers the Act's tab while
   another document is showing. A new corpus is one more menu entry
   (`docList()` in `app.js`), not another tab
 - Each attached document has its own home page — `#/gdpr`, `#/guidance/pp`,
-  `#/guidance/hr`, `#/kimig` — reached from its name in the breadcrumb of any
+  `#/guidance/hr`, `#/guidance/bafin`, `#/kimig` — reached from its name in the breadcrumb of any
   of its sections and from the cards on the Act's home page. It lists the
   document's parts, what it interprets (guidelines) or which provisions of the
   Act it cites and from which sections (KI-MIG), and the rail graph shows the
@@ -396,6 +441,9 @@ so the distinction survives without colour.
 The KI-MIG is a German federal statute and, as an official work, not subject
 to copyright (§ 5 UrhG); it is reproduced from
 [gesetze-im-internet.de](https://www.gesetze-im-internet.de/ki-mig/).
+
+BaFin's guidance is reproduced from the English version BaFin published. It
+is BaFin's work, shown here as a reading aid.
 
 The texts of Regulation (EU) 2024/1689, Regulation (EU) 2026/1744 and
 Regulation (EU) 2016/679 are

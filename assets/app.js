@@ -18,7 +18,7 @@
   var TYPE_LABEL = { article: "Articles", recital: "Recitals", annex: "Annexes", definition: "Terms", guidance: "Guidance", kimig: "KI-MIG", gdpr: "GDPR" };
   var KIND_LABEL = {
     cites: "cites", annex: "annex", uses: "defined term",
-    explains: "cites", relates: "topical", interprets: "interprets"
+    explains: "cites", relates: "topical", interprets: "interprets", concords: "related"
   };
 
   var state = {
@@ -261,9 +261,11 @@
                   name: "GDPR", sub: (DATA.gdprMeta || {}).cite });
     }
     (DATA.guidanceDocs || []).forEach(function (d) {
-      list.push({ id: "gdl-" + d.slug, group: "Commission guidance", type: "guidance",
-                  name: d.name, sub: d.draft ? "Draft guidelines" : "Guidelines",
-                  badge: d.draft ? "draft" : "adopted", draft: d.draft });
+      var bafin = d.authority === "BaFin";
+      list.push({ id: "gdl-" + d.slug, group: bafin ? "Supervisory guidance" : "Commission guidance",
+                  type: "guidance", name: d.name,
+                  sub: bafin ? "BaFin · DORA and AI" : d.draft ? "Draft guidelines" : "Guidelines",
+                  badge: bafin ? "non-binding" : d.draft ? "draft" : "adopted", draft: d.draft });
     });
     if (DATA.kimig && DATA.kimig.length) {
       list.push({ id: "kimig", group: "National implementation", type: "kimig",
@@ -551,12 +553,16 @@
     }
 
     /* the Commission's own reading of Articles 5 and 6, section by section */
-    if (DATA.guidance && DATA.guidance.length) {
+    var commission = (DATA.guidanceDocs || []).filter(function (d) { return d.authority !== "BaFin"; });
+    var commissionSecs = (DATA.guidance || []).filter(function (g) {
+      return commission.some(function (d) { return d.slug === g.doc; });
+    });
+    if (commissionSecs.length) {
       h += '<div class="block"><div class="block-head"><h2>Commission guidance</h2>' +
-        '<span class="block-count">' + DATA.guidance.length + "</span>" +
+        '<span class="block-count">' + commissionSecs.length + "</span>" +
         '<span class="block-note">attached to the provisions it interprets</span></div>' +
         '<div class="gcards">';
-      (DATA.guidanceDocs || []).forEach(function (d) {
+      commission.forEach(function (d) {
         var secs = DATA.guidance.filter(function (g) { return g.doc === d.slug; });
         h += '<button class="gcard" type="button" data-route="' + docRoute("gdl-" + d.slug) + '">' +
           '<span class="gcard-top"><span class="gcard-name">' + esc(d.name) + "</span>" +
@@ -568,6 +574,23 @@
       });
       h += "</div></div>";
     }
+
+    /* supervisory guidance: BaFin on DORA and AI, related to the Act editorially */
+    (DATA.guidanceDocs || []).filter(function (d) { return d.authority === "BaFin"; }).forEach(function (d) {
+      var secs = DATA.guidance.filter(function (g) { return g.doc === d.slug; });
+      var related = reach(secs, { concords: 1 }).length;
+      h += '<div class="block"><div class="block-head"><h2>Supervisory guidance</h2>' +
+        '<span class="block-count">' + secs.length + "</span>" +
+        '<span class="block-note">related to the Act’s requirements, editorially</span></div>' +
+        '<div class="gcards">' +
+        '<button class="gcard" type="button" data-route="' + docRoute("gdl-" + d.slug) + '">' +
+        '<span class="gcard-top"><span class="gcard-name">' + esc(d.short) + " · Germany</span>" +
+        '<span class="gdoc-badge" data-draft="0">non-binding</span></span>' +
+        '<span class="gcard-title">' + esc(d.title) + "</span>" +
+        '<span class="gcard-sub">' + esc(d.cite) + " · " + secs.length + " sections · related to " +
+        related + " requirements of the Act</span>" +
+        "</button></div></div>";
+    });
 
     /* the German implementing law, cited into the Act provision by provision */
     if (DATA.kimig && DATA.kimig.length) {
@@ -668,7 +691,8 @@
     // The note below names the citation and status, so this line doesn't.
     var h = '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>Guidance</span>' +
       "<i>›</i><span>" + esc(d.name) + "</span></nav>" +
-      '<span class="kicker" data-type="guidance">Commission guidance</span>' +
+      '<span class="kicker" data-type="guidance">' +
+        (d.authority === "BaFin" ? "Supervisory guidance" : "Commission guidance") + "</span>" +
       '<h1 class="doc-title">' + esc(d.title) + "</h1>" +
       '<p class="doc-num">' + secs.length + " sections" +
       (paras > 0 ? " · paras (1)–(" + paras + ")" : "") + "</p>" +
@@ -691,6 +715,17 @@
         '<span class="block-note">the provisions and terms these guidelines explain</span></div>' +
         '<div class="links">' + about.map(function (x) {
           return linkRow(x.n, x.from.length + (x.from.length === 1 ? " section" : " sections"));
+        }).join("") + "</div></div>";
+    }
+
+    // BaFin's instead: the Act's requirements its subjects meet, not a reading of the Act.
+    var related = reach(secs, { concords: 1 });
+    if (related.length) {
+      h += '<div class="block"><div class="block-head"><h2>Related requirements in the Act</h2>' +
+        '<span class="block-count">' + related.length + "</span>" +
+        '<span class="block-note">editorial — what a section’s subject meets in the Act, not a citation</span></div>' +
+        '<div class="links">' + related.map(function (x) {
+          return linkRow(x.n, x.from.map(function (s) { return "§ " + s.sec; }).join(", "));
         }).join("") + "</div></div>";
     }
     return h;
@@ -1061,6 +1096,7 @@
     /* Commission guidance attached to the provisions it interprets */
     if (n.type === "article" || n.type === "annex" || n.type === "definition") {
       renderGuidanceFor(el.doc, n);
+      renderConcordsFor(el.doc, n);
       renderKimigFor(el.doc, n);
     }
     if (n.type === "guidance") {
@@ -1089,13 +1125,21 @@
     if (n.type === "article") return "Article " + artKey(n);
     if (n.type === "recital") return "Recital " + n.num;
     if (n.type === "annex") return "Annex " + n.roman;
-    if (n.type === "guidance") return "Commission guidance";
+    if (n.type === "guidance") {
+      return (guidanceDoc(n.doc) || {}).authority === "BaFin" ? "Supervisory guidance" : "Commission guidance";
+    }
     if (n.type === "kimig") return "German implementing law";
     if (n.type === "gdpr") return "GDPR · Article " + n.key;
     return "Defined term";
   }
 
   function guidanceNote(d) {
+    if (d.authority === "BaFin") {
+      return '<div class="gl-note" data-draft="0"><b>Supervisory guidance</b> — ' + esc(d.cite) +
+        ". Non-binding advice on applying DORA to AI systems at financial entities; it does not " +
+        "interpret the AI Act. Its references to DORA are not linked, and its links to " +
+        "requirements of the Act are editorial.</div>";
+    }
     return '<div class="gl-note" data-draft="' + (d.draft ? "1" : "0") + '">' +
       (d.draft
         ? "<b>Draft.</b> Published for stakeholder consultation and not yet adopted — " +
@@ -1180,13 +1224,25 @@
       .filter(function (e) { return e.k === "interprets"; })
       .map(function (e) { return N[e.t]; })
       .filter(Boolean);
+    var related = OUT[n.id].filter(function (e) { return e.k === "concords" && N[e.t]; });
 
     var sec = document.createElement("section");
     sec.className = "block";
-    var h = '<div class="block-head"><h2>Interprets</h2>' +
-      '<span class="block-count">' + tg.length + "</span></div>";
-    if (tg.length) {
-      h += '<div class="links">' + tg.map(function (x) { return linkRow(x, ""); }).join("") + "</div>";
+    var h = "";
+    // BaFin's sections interpret nothing in the Act (`act` null); the
+    // Commission's always show what they interpret, even when it is nothing.
+    if (!("act" in n)) {
+      h += '<div class="block-head"><h2>Interprets</h2>' +
+        '<span class="block-count">' + tg.length + "</span></div>";
+      if (tg.length) {
+        h += '<div class="links">' + tg.map(function (x) { return linkRow(x, ""); }).join("") + "</div>";
+      }
+    }
+    if (related.length) {
+      h += '<div class="block-head"><h2>Related requirements in the AI Act</h2>' +
+        '<span class="block-count">' + related.length + "</span>" +
+        '<span class="block-note">editorial, not a citation</span></div>' +
+        '<div class="links">' + related.map(function (e) { return concordRow(N[e.t], e.why); }).join("") + "</div>";
     }
 
     var sibs = DATA.guidance.filter(function (g) { return g.doc === n.doc; });
@@ -1223,6 +1279,28 @@
       '<div class="links">' + ks.map(function (k) { return linkRow(k, ""); }).join("") + "</div>";
     root.appendChild(sec);
     wireLinks(sec);
+  }
+
+  /* Supervisory guidance whose subject meets this provision. The link is
+     editorial, so each row carries its reason. */
+  function renderConcordsFor(root, n) {
+    var rel = IN[n.id]
+      .filter(function (e) { return e.k === "concords" && N[e.s]; })
+      .sort(function (a, b) { return N[a.s].num - N[b.s].num; });
+    if (!rel.length) return;
+    var sec = document.createElement("section");
+    sec.className = "block";
+    sec.innerHTML = '<div class="block-head"><h2>Supervisory guidance</h2>' +
+      '<span class="block-count">' + rel.length + "</span>" +
+      '<span class="block-note">related by subject, editorially — not a citation</span></div>' +
+      '<div class="links">' + rel.map(function (e) { return concordRow(N[e.s], e.why); }).join("") + "</div>";
+    root.appendChild(sec);
+    wireLinks(sec);
+  }
+
+  /* An editorial link to a related requirement, and the reason for it. */
+  function concordRow(n, why) {
+    return '<div class="concord">' + linkRow(n, "") + '<p class="concord-why">' + esc(why) + "</p></div>";
   }
 
   /* The Act's side of a GDPR article: the provisions, recitals and guidance
@@ -1395,7 +1473,7 @@
     el.conn.scrollTop = 0;
   }
 
-  var KIND_ORDER = { interprets: 0, cites: 1, annex: 2, explains: 3, relates: 4, uses: 5 };
+  var KIND_ORDER = { interprets: 0, cites: 1, annex: 2, explains: 3, relates: 4, uses: 5, concords: 6 };
 
   function edgeSort(a, b) {
     var oa = a.k in KIND_ORDER ? KIND_ORDER[a.k] : 9;
@@ -1425,7 +1503,7 @@
     if (n.type === "article") return "Art. " + artKey(n);
     if (n.type === "recital") return (n.amending ? "Omni. " : "Rec. ") + n.num;
     if (n.type === "annex") return "Annex " + n.roman;
-    if (n.type === "guidance") return (n.doc === "pp" ? "Proh." : "HR") + " § " + n.sec;
+    if (n.type === "guidance") return ((guidanceDoc(n.doc) || {}).short || "") + " § " + n.sec;
     if (n.type === "kimig") return "KI-MIG § " + n.key;
     if (n.type === "gdpr") return "GDPR Art. " + n.key;
     return "Term " + n.num;
@@ -1457,9 +1535,12 @@
     // The German KI-MIG has none of the Act's English terms to find; its
     // references to the Act arrive already linked in either language. The
     // GDPR has the words but not the meanings: its 'personal data' is its own
-    // Article 4, not the Act's definition that points there.
+    // Article 4, not the Act's definition that points there. Nor does BaFin
+    // use the Act's vocabulary: its 'provider' is a cloud service provider.
     var self = N[selfId];
-    if (!(self && (inGerman(self) || self.type === "gdpr"))) linkifyTerms(root, selfId);
+    if (!(self && (inGerman(self) || self.type === "gdpr" || ("act" in self && self.act !== "aia")))) {
+      linkifyTerms(root, selfId);
+    }
     root.querySelectorAll(".xref").forEach(function (a) {
       a.addEventListener("mouseenter", function (ev) { tipForNode(N[a.dataset.node], ev); });
       a.addEventListener("mouseleave", function () { tipForNode(null); });
@@ -1496,15 +1577,16 @@
   // "Article 4(4) of Regulation (EU) 2016/679" is the GDPR, not the Act. This
   // is parse.py's DEFLECT_RE and cited_act(), so the links on the page are the
   // edges in the graph: what may follow a reference and hand it to an act.
-  var DEFLECT_RE = /^(?:\(\d+\)|\([a-z]+\)|,|first|second|third|fourth|subparagraph|points?|and|or|to|Articles?|\d{1,3}|\s)*(?:(?:of|to)\s+(?:(that)\s+|the\s+[A-Z]{2,8}\s+)?(?:Delegated\s+|Implementing\s+)?(?:Regulation|Directive|Decision|the\s+Charter|the\s+Treaty|Council)|\(?(TFEU|TEU|GDPR|EUDPR|LED|DSA|DMA|UCPD|CCD|ECHR|CER|Charter)\b|(thereof))/;
+  var DEFLECT_RE = /^(?:\(\d+\)|\([a-z]+\)|,|first|second|third|fourth|subparagraph|points?|and|or|to|Articles?|\d{1,3}|\s)*(?:(?:of|to)\s+(?:(that)\s+|the\s+[A-Z]{2,8}\s+)?(?:Delegated\s+|Implementing\s+)?(?:Regulation|Directive|Decision|the\s+Charter|the\s+Treaty|Council)|(?:(?:of|under|in)\s+(?:the\s+)?(?:EU\s+)?)?\(?(TFEU|TEU|GDPR|EUDPR|LED|DSA|DMA|UCPD|CCD|ECHR|CER|Charter|DORA|RTS|ITS|RMF|AI\s+Act)\b|(thereof))/;
   var CORPUS_CELEX = { "2024/1689": "aia", "2016/679": "gdpr" };
+  var CORPUS_ABBR = { "GDPR": "gdpr", "AI Act": "aia" };
 
   /* "self" when a reference names no act, "aia" or "gdpr" when it names one
      in the corpus, null for any other act. */
   function citedAct(tail, amending) {
     var m = DEFLECT_RE.exec(tail.slice(0, 90));
     if (!m) return "self";
-    if (m[2]) return m[2] === "GDPR" ? "gdpr" : null;
+    if (m[2]) return CORPUS_ABBR[m[2].replace(/\s+/g, " ")] || null;
     if (m[1] || m[3]) return amending ? "self" : null;
     var named = tail.slice(m[0].length, m[0].length + 20);
     for (var celex in CORPUS_CELEX) if (named.indexOf(celex) >= 0) return CORPUS_CELEX[celex];
@@ -1517,7 +1599,9 @@
   function linkifyRefs(root, selfId) {
     var self = N[selfId];
     var selfDoc = self && self.type === "guidance" ? self.doc : null;
-    var ownAct = self && self.type === "gdpr" ? "gdpr" : "aia";
+    // The act a reference naming none belongs to. BaFin's are DORA's, which
+    // the corpus does not hold (`act` null), so those stay plain text.
+    var ownAct = !self ? "aia" : self.type === "gdpr" ? "gdpr" : "act" in self ? self.act : "aia";
     textNodes(root).forEach(function (t) {
       var s = t.nodeValue;
       REF_RE.lastIndex = 0;

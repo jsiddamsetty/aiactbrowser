@@ -42,6 +42,8 @@ DOCS = [
         "title": "Guidelines on prohibited AI practices",
         "cite": "C(2025) 5052 final · adopted 29 July 2025",
         "draft": False,
+        "short": "Proh.",
+        "authority": "Commission",
         "files": [
             {"file": "source-guidelines-prohibited.pdf", "skip": set()},
         ],
@@ -53,6 +55,8 @@ DOCS = [
         "title": "Draft guidelines on the classification of high-risk AI systems",
         "cite": "draft for stakeholder consultation, 2026 · not yet adopted",
         "draft": True,
+        "short": "HR",
+        "authority": "Commission",
         "files": [
             # V and VI (entry into application, review) carry their real
             # text here; III and IV point to the Annex III part. Its "1." and
@@ -725,7 +729,7 @@ def parse_guidelines():
     for i, n in enumerate(nodes):
         n["num"] = i + 1
 
-    docs_meta = [{k: d[k] for k in ("slug", "name", "title", "cite", "draft")}
+    docs_meta = [{k: d[k] for k in ("slug", "name", "title", "cite", "draft", "short", "authority")}
                  for d in DOCS]
     return nodes, docs_meta
 

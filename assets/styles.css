@@ -1291,6 +1291,29 @@ sup.fn:hover { color: var(--accent); }
 }
 .gl-ex .doc-p { margin: 0; font-size: 15px; }
 
+/* a provision quoted beside the text, as BaFin sets DORA's articles */
+.gl-box {
+  margin: 12px 0 16px;
+  padding: 10px 14px;
+  background: var(--sunk);
+  border-left: 2px solid var(--ink-3);
+  border-radius: 0 4px 4px 0;
+}
+.gl-box-ref { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin: 0 0 2px; }
+.gl-box-title { font-family: var(--sans); font-size: 13.5px; font-weight: 600; color: var(--ink); margin: 0 0 6px; }
+.gl-box .doc-p { margin: 0; font-size: 15px; }
+
+/* a figure from a PDF, drawn on white as printed, in either theme */
+.gl-fig { margin: 16px 0 20px; }
+.gl-fig img {
+  display: block; max-width: 100%; height: auto;
+  background: #fff; border: 1px solid var(--rule); border-radius: 6px; padding: 8px;
+}
+.gl-fig figcaption { font-family: var(--sans); font-size: 12.5px; color: var(--ink-3); margin-top: 6px; }
+
+/* an editorial link, and the reason for it */
+.concord .concord-why { margin: -2px 0 10px 12px; font-size: 12.5px; line-height: 1.5; color: var(--ink-2); }
+
 /* sub-headings inside a section: "a) Narrow procedural task" */
 .gl-h3 {
   font-family: var(--sans); font-size: 14px; font-weight: 600;

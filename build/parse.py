@@ -495,8 +495,9 @@ ANX_RE = re.compile(
 #     "of the Charter") is another act — routed to it when it is in the corpus
 #     (CORPUS_CELEX), so the Act naming itself by number stays the Act and
 #     naming the GDPR lands on the GDPR;
-#   - the Commission guidelines cite other acts by trailing abbreviation
-#     ("Article 35 GDPR", "Articles 5 to 9 UCPD", "Article 47 (Charter)");
+#   - the guidelines cite other acts by abbreviation, trailing or after "of
+#     the" ("Article 35 GDPR", "Article 47 (Charter)", "Article 8 of DORA",
+#     "Article 16 of the RTS RMF"); a named "AI Act" is the Act itself;
 #     "AI"(Act) and the "AIA"/"AIP" codes of Annex XIV are the Act itself
 #     and are deliberately absent from the list;
 #   - "of that Regulation" / "thereof" point at the instrument named last,
@@ -511,13 +512,15 @@ DEFLECT_RE = re.compile(
     r"(?:(?:of|to)\s+(?:(?P<that>that)\s+|the\s+[A-Z]{2,8}\s+)?"
     r"(?:Delegated\s+|Implementing\s+)?"
     r"(?:Regulation|Directive|Decision|the\s+Charter|the\s+Treaty|Council)"
-    r"|\(?(?P<abbr>TFEU|TEU|GDPR|EUDPR|LED|DSA|DMA|UCPD|CCD|ECHR|CER|Charter)\b"
+    r"|(?:(?:of|under|in)\s+(?:the\s+)?(?:EU\s+)?)?"
+    r"\(?(?P<abbr>TFEU|TEU|GDPR|EUDPR|LED|DSA|DMA|UCPD|CCD|ECHR|CER|Charter|"
+    r"DORA|RTS|ITS|RMF|AI\s+Act)\b"
     r"|(?P<thereof>thereof))")
 
 # The acts in the corpus, by the number EUR-Lex texts cite them by and the
 # abbreviation the guidelines use. A reference naming one is routed to it.
 CORPUS_CELEX = {"2024/1689": "aia", "2016/679": "gdpr"}
-CORPUS_ABBR = {"GDPR": "gdpr"}
+CORPUS_ABBR = {"GDPR": "gdpr", "AI Act": "aia"}
 SELF = "self"
 
 # Each act's article ids, and its highest article number.
@@ -532,7 +535,7 @@ def cited_act(tail, amending=False):
     if m is None:
         return SELF
     if m.group("abbr"):
-        return CORPUS_ABBR.get(m.group("abbr"))
+        return CORPUS_ABBR.get(re.sub(r"\s+", " ", m.group("abbr")))
     if m.group("that") or m.group("thereof"):
         return SELF if amending else None
     named = tail[m.end():m.end() + 20]

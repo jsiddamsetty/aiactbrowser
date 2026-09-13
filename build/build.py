@@ -45,6 +45,7 @@ from parse_consolidated import AMENDER, norm_ws, parse_consolidated
 from parse_guidelines import parse_guidelines
 from parse_kimig import parse_kimig, kimig_edges, apply_translation
 from parse_gdpr import parse_gdpr, gdpr_edges
+from parse_bafin import parse_bafin, bafin_edges
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -196,6 +197,15 @@ def main():
     # The Commission guidelines that interpret Article 5 and Article 6.
     print("reading the guidelines…")
     guidance, guidance_docs = parse_guidelines()
+    # BaFin's guidance on ICT risks in AI — supervisory advice on DORA, which
+    # joins the guidance layer but does not interpret the Act.
+    print("reading the BaFin guidance…")
+    bafin, bafin_doc, bafin_figures = parse_bafin()
+    for i, n in enumerate(bafin, len(guidance) + 1):
+        n["num"] = i
+    guidance = guidance + bafin
+    guidance_docs.append(bafin_doc)
+    write_files(os.path.join(DATA, "bafin"), bafin_figures)
 
     # The KI-MIG — the German implementing law, from gesetze-im-internet.de.
     print("reading the KI-MIG…")
@@ -214,6 +224,7 @@ def main():
     print("linking…")
     edges = build_edges(by_id, articles, all_recitals, annexes, definitions)
     edges.extend(guidance_edges(guidance, definitions, by_id))
+    edges.extend(bafin_edges(bafin, definitions, by_id))
     edges.extend(kimig_edges(kimig, by_id))
     # Into the GDPR, from its own articles and from every text of the Act that
     # names it — references the deflection guard used to drop.
@@ -254,7 +265,8 @@ def main():
                 "omnibusRecitals": len(omni_recitals),
                 "annexes": len(annexes),
                 "definitions": len(definitions),
-                "guidance": len(guidance),
+                "guidance": len(guidance) - len(bafin),
+                "bafin": len(bafin),
                 "kimig": len(kimig),
                 "kimigEnglish": kimig_en,
                 "gdpr": len(gdpr),
@@ -323,9 +335,14 @@ def guidance_edges(guidance, definitions, by_id):
         # The guidelines cite other instruments constantly — "Article 4(4)
         # of Regulation (EU) 2016/679" is the GDPR, not the Act — and
         # article_refs/annex_refs drop any reference deflected to another act.
-        for ref in article_refs(g["text"]):
+        # BaFin's references that name no act are DORA's (`act` None), so only
+        # those naming the Act count, and its annexes and recitals are not ours.
+        own = g.get("act", "aia")
+        for ref in article_refs(g["text"], doc=own):
             if (g["id"], ref, "interprets") not in seen:
                 add(g["id"], ref, "cites")
+        if own != "aia":
+            continue
         for ref in annex_refs(g["text"]):
             if (g["id"], ref, "interprets") not in seen:
                 add(g["id"], ref, "annex")
@@ -427,6 +444,14 @@ def sort_key(nid):
     return (order, ROMAN.get(rest, 0), "")
 
 
+def write_files(folder, files):
+    """Binary build outputs — the figures a PDF source carries."""
+    os.makedirs(folder, exist_ok=True)
+    for name, data in files.items():
+        with open(os.path.join(folder, name), "wb") as fh:
+            fh.write(data)
+
+
 def write(path, obj):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
@@ -441,6 +466,8 @@ def report(doc, changes, original):
     print("annexes     %d  (%d in the original)" % (c["annexes"], len(original["annexes"])))
     print("definitions %d" % c["definitions"])
     print("guidance    %d sections" % c["guidance"])
+    print("BaFin       %d sections  (%d related requirements of the Act)"
+          % (c["bafin"], sum(1 for e in doc["edges"] if e["k"] == "concords")))
     print("KI-MIG      %d sections  (%d with an English translation)"
           % (c["kimig"], c["kimigEnglish"]))
     into = {e["t"] for e in doc["edges"]
