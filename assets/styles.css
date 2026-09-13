@@ -25,6 +25,7 @@
   --c-definition: #A30877;
   --c-guidance:   #6A40D8;
   --c-kimig:      #7D5800;
+  --c-gdpr:       #17412C;
 
   --c-article-bg:    #1F4FCC14;
   --c-recital-bg:    #CC6F0014;
@@ -32,6 +33,7 @@
   --c-definition-bg: #A3087714;
   --c-guidance-bg:   #6A40D814;
   --c-kimig-bg:      #7D580014;
+  --c-gdpr-bg:       #17412C14;
 
   --accent:     var(--c-article);
   --focus:      #1F4FCC;
@@ -66,6 +68,7 @@
   --c-definition: #B93C8C;
   --c-guidance:   #9678EC;
   --c-kimig:      #FEC748;
+  --c-gdpr:       #A7D8C1;
 
   --c-article-bg:    #4D68DC24;
   --c-recital-bg:    #AF860024;
@@ -73,6 +76,7 @@
   --c-definition-bg: #B93C8C24;
   --c-guidance-bg:   #9678EC24;
   --c-kimig-bg:      #FEC74824;
+  --c-gdpr-bg:       #A7D8C124;
 
   --focus: #7B93F0;
   --shadow: 0 1px 2px #0006, 0 8px 24px -12px #0009;
@@ -456,7 +460,7 @@ h1.doc-title {
   font-size: 12.5px; color: var(--ink-3);
 }
 .doc-facts b { color: var(--ink); font-weight: 600; }
-.doc-facts a { color: var(--c-kimig); }
+.doc-facts a { color: var(--c); }
 
 /* part numbers take their document's colour */
 .chapgrid[data-type] .chapcard-n { color: var(--c); }
@@ -500,7 +504,7 @@ h1.doc-title {
   opacity: 0; transition: opacity .15s;
 }
 .para:hover::before { opacity: 1; }
-.para.is-hit {
+.para.is-hit, .point.is-hit {
   background: color-mix(in srgb, var(--c-recital) 13%, transparent);
   box-shadow: 0 0 0 6px color-mix(in srgb, var(--c-recital) 13%, transparent);
   border-radius: 2px;
@@ -532,6 +536,8 @@ h1.doc-title {
 .xref[data-type="guidance"]:hover { background: var(--c-guidance-bg); }
 .xref[data-type="kimig"] { color: var(--c-kimig); border-bottom-color: color-mix(in srgb, var(--c-kimig) 35%, transparent); }
 .xref[data-type="kimig"]:hover { background: var(--c-kimig-bg); }
+.xref[data-type="gdpr"] { color: var(--c-gdpr); border-bottom-color: color-mix(in srgb, var(--c-gdpr) 35%, transparent); }
+.xref[data-type="gdpr"]:hover { background: var(--c-gdpr-bg); }
 .xref[data-type="definition"] { color: var(--c-definition); border-bottom-color: color-mix(in srgb, var(--c-definition) 35%, transparent); }
 .xref[data-type="definition"]:hover { background: var(--c-definition-bg); }
 
@@ -662,6 +668,7 @@ sup.fn:hover { color: var(--accent); }
 [data-type="definition"] { --c: var(--c-definition); }
 [data-type="guidance"]   { --c: var(--c-guidance); }
 [data-type="kimig"]      { --c: var(--c-kimig); }
+[data-type="gdpr"]       { --c: var(--c-gdpr); }
 .kicker[data-type], .link-id[data-type], .res-id[data-type] { color: var(--c); }
 .kicker[data-type="article"]    { background: var(--c-article-bg); }
 .kicker[data-type="recital"]    { background: var(--c-recital-bg); }
@@ -669,6 +676,7 @@ sup.fn:hover { color: var(--accent); }
 .kicker[data-type="definition"] { background: var(--c-definition-bg); }
 .kicker[data-type="guidance"]   { background: var(--c-guidance-bg); }
 .kicker[data-type="kimig"]      { background: var(--c-kimig-bg); }
+.kicker[data-type="gdpr"]       { background: var(--c-gdpr-bg); }
 
 /* ── graph rail ────────────────────────────────────────────── */
 
@@ -1320,6 +1328,8 @@ sup.fn:hover { color: var(--accent); }
 .gcard:hover { border-color: var(--c-guidance); }
 .gcard[data-kind="kimig"]:hover { border-color: var(--c-kimig); }
 .gcard[data-kind="kimig"] .gcard-name { color: var(--c-kimig); }
+.gcard[data-kind="gdpr"]:hover { border-color: var(--c-gdpr); }
+.gcard[data-kind="gdpr"] .gcard-name { color: var(--c-gdpr); }
 .gcard-top { display: flex; align-items: center; gap: 8px; width: 100%; justify-content: space-between; }
 .gcard-name {
   font-family: var(--mono); font-size: 10.5px; font-weight: 500;

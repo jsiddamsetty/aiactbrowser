@@ -44,6 +44,7 @@ from parse import (
 from parse_consolidated import AMENDER, norm_ws, parse_consolidated
 from parse_guidelines import parse_guidelines
 from parse_kimig import parse_kimig, kimig_edges, apply_translation
+from parse_gdpr import parse_gdpr, gdpr_edges
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -202,7 +203,11 @@ def main():
     # English leads where a checked translation exists; German stays alongside.
     kimig_en = apply_translation(kimig, kimig_parts, kimig_meta)
 
-    nodes = articles + all_recitals + annexes + definitions + guidance + kimig
+    # The GDPR — the regulation the Act cites most, and defines its data terms by.
+    print("reading the GDPR…")
+    gdpr, gdpr_chapters, gdpr_meta = parse_gdpr()
+
+    nodes = articles + all_recitals + annexes + definitions + guidance + kimig + gdpr
     by_id = {n["id"]: n for n in nodes}
 
     # ---- edges -----------------------------------------------------------
@@ -210,6 +215,10 @@ def main():
     edges = build_edges(by_id, articles, all_recitals, annexes, definitions)
     edges.extend(guidance_edges(guidance, definitions, by_id))
     edges.extend(kimig_edges(kimig, by_id))
+    # Into the GDPR, from its own articles and from every text of the Act that
+    # names it — references the deflection guard used to drop.
+    edges.extend(gdpr_edges(gdpr, articles + all_recitals + annexes + definitions + guidance,
+                            by_id))
 
     # Recital -> provision, for both preambles.
     seen = {(e["s"], e["t"], e["k"]) for e in edges}
@@ -248,6 +257,7 @@ def main():
                 "guidance": len(guidance),
                 "kimig": len(kimig),
                 "kimigEnglish": kimig_en,
+                "gdpr": len(gdpr),
                 "edges": len(edges),
                 "changed": len(changed),
             },
@@ -262,6 +272,9 @@ def main():
         "guidanceDocs": guidance_docs,
         "kimig": kimig,
         "kimigParts": kimig_parts,
+        "gdprMeta": gdpr_meta,
+        "gdprChapters": gdpr_chapters,
+        "gdpr": gdpr,
         "footnotes": current["footnotes"],
         "edges": edges,
     }
@@ -430,6 +443,10 @@ def report(doc, changes, original):
     print("guidance    %d sections" % c["guidance"])
     print("KI-MIG      %d sections  (%d with an English translation)"
           % (c["kimig"], c["kimigEnglish"]))
+    into = {e["t"] for e in doc["edges"]
+            if e["t"].startswith("gdpr_") and not e["s"].startswith("gdpr_")}
+    print("GDPR        %d articles  (%d cited by the Act and its guidance)"
+          % (c["gdpr"], len(into)))
     print("edges       %d" % c["edges"])
     cc = changes["meta"]["counts"]
     print("changes     %d  (%d inserted · %d amended · %d removed)"
@@ -449,6 +466,8 @@ def report(doc, changes, original):
         warn.append("expected 180 recitals")
     if c["kimig"] != 20:
         warn.append("expected 20 KI-MIG sections")
+    if c["gdpr"] != 99:
+        warn.append("expected 99 GDPR articles")
     if c["kimigEnglish"] != c["kimig"]:
         warn.append("%d KI-MIG sections have no valid English translation"
                     % (c["kimig"] - c["kimigEnglish"]))

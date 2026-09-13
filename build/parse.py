@@ -489,11 +489,12 @@ ANX_RE = re.compile(
     r"\bAnnex(?:es)?\s+(%s)\b((?:\s*(?:,|and|to|or)\s*%s\b)*)" % (ROMAN_NE, ROMAN_NE))
 
 # "Article 4(4) of Regulation (EU) 2016/679" is the GDPR, not this Act: a
-# reference only counts when the text that follows does not deflect it to
-# another instrument. Three cases:
+# reference belongs to the text's own act only when what follows does not
+# deflect it to another instrument. Three cases:
 #   - a named instrument ("of Regulation (EU) 2016/679", "to Directive …",
-#     "of the Charter") is another act, unless the name is Regulation (EU)
-#     2024/1689 — the Act referring to itself by number;
+#     "of the Charter") is another act — routed to it when it is in the corpus
+#     (CORPUS_CELEX), so the Act naming itself by number stays the Act and
+#     naming the GDPR lands on the GDPR;
 #   - the Commission guidelines cite other acts by trailing abbreviation
 #     ("Article 35 GDPR", "Articles 5 to 9 UCPD", "Article 47 (Charter)");
 #     "AI"(Act) and the "AIA"/"AIP" codes of Annex XIV are the Act itself
@@ -513,46 +514,62 @@ DEFLECT_RE = re.compile(
     r"|\(?(?P<abbr>TFEU|TEU|GDPR|EUDPR|LED|DSA|DMA|UCPD|CCD|ECHR|CER|Charter)\b"
     r"|(?P<thereof>thereof))")
 
-SELF_CELEX = "2024/1689"
+# The acts in the corpus, by the number EUR-Lex texts cite them by and the
+# abbreviation the guidelines use. A reference naming one is routed to it.
+CORPUS_CELEX = {"2024/1689": "aia", "2016/679": "gdpr"}
+CORPUS_ABBR = {"GDPR": "gdpr"}
+SELF = "self"
+
+# Each act's article ids, and its highest article number.
+ARTICLE_IDS = {"aia": ("art_", 113), "gdpr": ("gdpr_", 99)}
+
+
+def cited_act(tail, amending=False):
+    """The act a reference at the start of `tail` belongs to: SELF when it
+    names none, a corpus slug ('aia', 'gdpr') when it names an act in the
+    corpus, None for any other act."""
+    m = DEFLECT_RE.match(tail[:90])
+    if m is None:
+        return SELF
+    if m.group("abbr"):
+        return CORPUS_ABBR.get(m.group("abbr"))
+    if m.group("that") or m.group("thereof"):
+        return SELF if amending else None
+    named = tail[m.end():m.end() + 20]
+    return next((slug for celex, slug in CORPUS_CELEX.items() if celex in named), None)
 
 
 def deflected(tail, amending=False):
-    """Whether a reference at the start of `tail` belongs to another act."""
-    m = DEFLECT_RE.match(tail[:90])
-    if m is None:
-        return False
-    if m.group("abbr"):
-        return True
-    if m.group("that") or m.group("thereof"):
-        return not amending
-    return SELF_CELEX not in tail[m.end():m.end() + 20]
+    """Whether a reference in the Act's texts belongs to another act."""
+    return cited_act(tail, amending) not in (SELF, "aia")
 
 
-def article_refs(text, self_id=None, amending=False):
-    """All 'Article N' / 'Articles N, M and K' targets in a block of text."""
+def article_refs(text, self_id=None, amending=False, doc="aia", to="aia"):
+    """All 'Article N' / 'Articles N, M and K' targets in a block of text.
+
+    `doc` is the act the text belongs to — what a reference naming no act
+    cites — and `to` the act whose articles are wanted: an AI Act recital's
+    "Article 22 of Regulation (EU) 2016/679" is found with to="gdpr" only.
+    """
+    prefix, top = ARTICLE_IDS[to]
     found = []
     for m in ART_RE.finditer(text):
-        if deflected(text[m.end():], amending):
+        act = cited_act(text[m.end():], amending)
+        if (doc if act == SELF else act) != to:
             continue
-        nums = [m.group(1)]
-        tail = m.group(2) or ""
-        connector_to = False
-        for tm in re.finditer(r"(,|and|to|or|[-–])\s*(\d{1,3}[a-z]?)\b", tail, re.I):
-            if tm.group(1).lower() in ("to", "-", "–"):
-                connector_to = True
-            nums.append(tm.group(2))
-        nums = [n.lower() for n in nums]
-        # "Articles 8 to 15" means the whole inclusive range.
-        if connector_to and len(nums) >= 2 and all(n.isdigit() for n in nums):
-            ints = [int(n) for n in nums]
-            expanded = set(ints)
-            for a, b in zip(ints, ints[1:]):
-                if b > a and b - a <= 40:
-                    expanded.update(range(a, b + 1))
-            nums = ["%d" % n for n in sorted(expanded)]
+        nums = [m.group(1).lower()]
+        for tm in re.finditer(r"(,|and|to|or|[-–])\s*(\d{1,3}[a-z]?)\b", m.group(2) or "", re.I):
+            n, prev = tm.group(2).lower(), nums[-1]
+            # "Articles 8 to 15" means the whole inclusive range — but only
+            # between the two numbers "to" joins: "Articles 15 to 22 and 34"
+            # is not 15 to 34.
+            if (tm.group(1).lower() in ("to", "-", "–") and prev.isdigit() and n.isdigit()
+                    and 0 < int(n) - int(prev) <= 40):
+                nums.extend("%d" % k for k in range(int(prev) + 1, int(n)))
+            nums.append(n)
         for n in nums:
-            if 1 <= int(re.match(r"\d+", n).group()) <= 113:
-                found.append("art_%s" % n)
+            if 1 <= int(re.match(r"\d+", n).group()) <= top:
+                found.append(prefix + n)
     if self_id:
         found = [f for f in found if f != self_id]
     return found

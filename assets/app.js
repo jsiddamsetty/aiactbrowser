@@ -13,9 +13,9 @@
   var TERM_BY_KEY = {};
   var SEARCH = [];
 
-  var TYPES = ["article", "recital", "annex", "definition", "guidance", "kimig"];
-  var ALL_TYPES = { article: true, recital: true, annex: true, definition: true, guidance: true, kimig: true };
-  var TYPE_LABEL = { article: "Articles", recital: "Recitals", annex: "Annexes", definition: "Terms", guidance: "Guidance", kimig: "KI-MIG" };
+  var TYPES = ["article", "recital", "annex", "definition", "guidance", "kimig", "gdpr"];
+  var ALL_TYPES = { article: true, recital: true, annex: true, definition: true, guidance: true, kimig: true, gdpr: true };
+  var TYPE_LABEL = { article: "Articles", recital: "Recitals", annex: "Annexes", definition: "Terms", guidance: "Guidance", kimig: "KI-MIG", gdpr: "GDPR" };
   var KIND_LABEL = {
     cites: "cites", annex: "annex", uses: "defined term",
     explains: "cites", relates: "topical", interprets: "interprets"
@@ -24,8 +24,8 @@
   var state = {
     route: null,
     depth: 1,
-    show: { article: true, recital: true, annex: true, definition: true, guidance: true, kimig: true },
-    ovShow: { article: true, recital: true, annex: true, definition: true, guidance: true, kimig: true },
+    show: { article: true, recital: true, annex: true, definition: true, guidance: true, kimig: true, gdpr: true },
+    ovShow: { article: true, recital: true, annex: true, definition: true, guidance: true, kimig: true, gdpr: true },
     ovFocus: null,          // provision the expanded graph is centred on
     ovScope: "all",         // "focus" | "all"
     ovDepth: 1
@@ -108,7 +108,7 @@
 
   function index() {
     var all = DATA.articles.concat(DATA.recitals, DATA.annexes, DATA.definitions,
-      DATA.guidance || [], DATA.kimig || []);
+      DATA.guidance || [], DATA.kimig || [], DATA.gdpr || []);
     all.forEach(function (n) { N[n.id] = n; OUT[n.id] = []; IN[n.id] = []; });
 
     DATA.edges.forEach(function (e) {
@@ -142,8 +142,8 @@
 
   /* ── routing ──────────────────────────────────────────────── */
 
-  var ROUTE_TO_ID = { article: "art_", recital: "rct_", annex: "anx_", term: "def_", guidance: "gdl_", kimig: "kimig_" };
-  var ID_TO_ROUTE = { art_: "article", rct_: "recital", anx_: "annex", def_: "term", gdl_: "guidance", kimig_: "kimig" };
+  var ROUTE_TO_ID = { article: "art_", recital: "rct_", annex: "anx_", term: "def_", guidance: "gdl_", kimig: "kimig_", gdpr: "gdpr_" };
+  var ID_TO_ROUTE = { art_: "article", rct_: "recital", anx_: "annex", def_: "term", gdl_: "guidance", kimig_: "kimig", gdpr_: "gdpr" };
 
   function routeOf(id) {
     var m = /^[a-z]+_/.exec(id);
@@ -162,7 +162,9 @@
     if (bits[0] === "changes") return { kind: "changes", focus: bits[1] || null };
     // A document's own home page: #/kimig, #/guidance/pp. Section ids always
     // carry a number (pp-2.3), so a bare slug never collides with one.
-    if (bits[0] === "kimig" && !bits[1] && DATA.kimig && DATA.kimig.length) return { kind: "doc", doc: "kimig" };
+    if ((bits[0] === "kimig" || bits[0] === "gdpr") && !bits[1] && (DATA[bits[0]] || []).length) {
+      return { kind: "doc", doc: bits[0] };
+    }
     if (bits[0] === "guidance" && bits[1] && guidanceDoc(bits[1])) return { kind: "doc", doc: "gdl-" + bits[1] };
     var pref = ROUTE_TO_ID[bits[0]];
     if (!pref || !bits[1]) return { kind: "home" };
@@ -172,7 +174,7 @@
   }
 
   function docRoute(doc) {
-    return doc === "kimig" ? "#/kimig" : "#/guidance/" + doc.slice(4);
+    return doc === "kimig" || doc === "gdpr" ? "#/" + doc : "#/guidance/" + doc.slice(4);
   }
 
   /* The hash that reopens a route — where closing the graph overlay returns. */
@@ -254,6 +256,10 @@
     var km = DATA.kimigMeta || {};
     var list = [{ id: "aia", group: "Regulation", type: "article",
                   name: "AI Act", sub: "Regulation (EU) 2024/1689" }];
+    if (DATA.gdpr && DATA.gdpr.length) {
+      list.push({ id: "gdpr", group: "Regulation", type: "gdpr",
+                  name: "GDPR", sub: (DATA.gdprMeta || {}).cite });
+    }
     (DATA.guidanceDocs || []).forEach(function (d) {
       list.push({ id: "gdl-" + d.slug, group: "Commission guidance", type: "guidance",
                   name: d.name, sub: d.draft ? "Draft guidelines" : "Guidelines",
@@ -268,6 +274,7 @@
 
   function docTitle(doc) {
     if (doc === "kimig") return (DATA.kimigMeta || {}).abbr || "KI-MIG";
+    if (doc === "gdpr") return "GDPR";
     var d = guidanceDoc(doc.slice(4));
     return d ? d.title : doc;
   }
@@ -275,6 +282,7 @@
   function docOf(n) {
     if (n.type === "guidance") return "gdl-" + n.doc;
     if (n.type === "kimig") return "kimig";
+    if (n.type === "gdpr") return "gdpr";
     return "aia";
   }
 
@@ -402,25 +410,9 @@
     var h = "";
 
     if (tocDoc === "aia" && tocTab === "act") {
-      DATA.chapters.forEach(function (c) {
-        var arts = DATA.articles.filter(function (a) { return a.chapter === c.roman; });
-        h += '<div class="chap" data-chap="' + c.roman + '">' +
-          '<button class="chap-btn" type="button">' +
-          '<span class="chap-num">' + esc(c.roman) + '</span>' +
-          '<span class="chap-name">' + esc(c.title) + '</span>' +
-          '<svg class="chap-caret" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>' +
-          '</button><div class="chap-list">';
-
-        var seenSection = null;
-        arts.forEach(function (a) {
-          if (a.sectionLabel && a.sectionLabel !== seenSection) {
-            seenSection = a.sectionLabel;
-            h += '<div class="sec-name">' + esc(a.sectionLabel) + ' · ' + esc(a.sectionTitle || "") + "</div>";
-          }
-          h += tocLink(a.id, "Art. " + artKey(a), a.title, a.status);
-        });
-        h += "</div></div>";
-      });
+      h = chapterToc(DATA.chapters, DATA.articles);
+    } else if (tocDoc === "gdpr") {
+      h = chapterToc(DATA.gdprChapters, DATA.gdpr);
     } else if (tocDoc === "aia" && tocTab === "recitals") {
       DATA.recitals.forEach(function (r) {
         h += tocLink(r.id, String(r.num), lede(r.text, 70));
@@ -481,6 +473,31 @@
     });
   }
 
+  /* A regulation's articles under its chapters and sections. */
+  function chapterToc(chapters, articles) {
+    var h = "";
+    chapters.forEach(function (c) {
+      var arts = articles.filter(function (a) { return a.chapter === c.roman; });
+      h += '<div class="chap" data-chap="' + c.roman + '">' +
+        '<button class="chap-btn" type="button">' +
+        '<span class="chap-num">' + esc(c.roman) + '</span>' +
+        '<span class="chap-name">' + esc(c.title) + '</span>' +
+        '<svg class="chap-caret" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>' +
+        '</button><div class="chap-list">';
+
+      var seenSection = null;
+      arts.forEach(function (a) {
+        if (a.sectionLabel && a.sectionLabel !== seenSection) {
+          seenSection = a.sectionLabel;
+          h += '<div class="sec-name">' + esc(a.sectionLabel) + ' · ' + esc(a.sectionTitle || "") + "</div>";
+        }
+        h += tocLink(a.id, "Art. " + artKey(a), a.title, a.status);
+      });
+      h += "</div></div>";
+    });
+    return h;
+  }
+
   function tocLink(id, num, name, status) {
     return '<button class="tl" type="button" data-id="' + id + '">' +
       '<span class="tl-num">' + esc(num) + '</span>' +
@@ -515,6 +532,23 @@
       "<span class="+'"banner-text"'+">Amended by the " + esc(m.amendedBy.short) + ": <b>" +
       c.changed + " provisions</b> added or rewritten.</span>" +
       '<span class="banner-go">See what changed →</span></a>';
+
+    /* the GDPR, which the Act defines its data terms by */
+    if (DATA.gdpr && DATA.gdpr.length) {
+      var gm = DATA.gdprMeta || {};
+      var reached = DATA.gdpr.filter(function (a) { return citedFromAct(a).length; }).length;
+      h += '<div class="block"><div class="block-head"><h2>Related regulation</h2>' +
+        '<span class="block-count">' + DATA.gdpr.length + "</span>" +
+        '<span class="block-note">linked wherever the Act cites it</span></div>' +
+        '<div class="gcards">' +
+        '<button class="gcard" type="button" data-kind="gdpr" data-route="#/gdpr">' +
+        '<span class="gcard-top"><span class="gcard-name">' + esc(gm.abbr) + "</span>" +
+        '<span class="gdoc-badge" data-draft="0">applies ' + esc(gm.applies) + "</span></span>" +
+        '<span class="gcard-title">' + esc(gm.title) + "</span>" +
+        '<span class="gcard-sub">' + esc(gm.cite) + " · " + DATA.gdpr.length + " articles · " +
+        reached + " cited by the Act and its guidance</span>" +
+        "</button></div></div>";
+    }
 
     /* the Commission's own reading of Articles 5 and 6, section by section */
     if (DATA.guidance && DATA.guidance.length) {
@@ -583,12 +617,13 @@
   /* ── document home pages ──────────────────────────────────── */
 
   /* A document's parts, as the Act home lists its chapters. */
-  function partGrid(type, parts) {
+  function partGrid(type, parts, unit) {
+    unit = unit || "sec";
     return '<div class="chapgrid" data-type="' + type + '">' + parts.map(function (p) {
       return '<button class="chapcard" type="button" data-goto="' + p.first + '">' +
         '<span class="chapcard-n">' + esc(p.n) + "</span>" +
         '<span class="chapcard-t"' + (p.lang ? ' lang="' + p.lang + '"' : "") + ">" + esc(p.title) + "</span>" +
-        '<span class="chapcard-c">' + p.count + (p.count === 1 ? " sec." : " secs.") + "</span></button>";
+        '<span class="chapcard-c">' + p.count + " " + unit + (p.count === 1 ? "." : "s.") + "</span></button>";
     }).join("") + "</div>";
   }
 
@@ -621,7 +656,8 @@
   }
 
   function renderDocHome(doc) {
-    el.doc.innerHTML = doc === "kimig" ? kimigHome() : guidanceHome(guidanceDoc(doc.slice(4)));
+    el.doc.innerHTML = doc === "kimig" ? kimigHome()
+      : doc === "gdpr" ? gdprHome() : guidanceHome(guidanceDoc(doc.slice(4)));
     wireHome();
   }
 
@@ -674,7 +710,7 @@
       h += '<p class="doc-alt"' + (de ? "" : ' lang="de"') + ">" + esc(de ? km.titleEn : km.title) + "</p>";
     }
 
-    h += '<ul class="doc-facts">' +
+    h += '<ul class="doc-facts" data-type="kimig">' +
       (km.adopted ? "<li>Adopted <b>" + esc(km.adopted) + "</b></li>" : "") +
       (km.inForce ? "<li>In force <b>" + esc(km.inForce) + "</b></li>" : "") +
       "<li><b>" + DATA.kimig.length + "</b> sections</li>" +
@@ -701,6 +737,63 @@
         }).join("") + "</div></div>";
     }
     return h;
+  }
+
+  function gdprHome() {
+    var gm = DATA.gdprMeta || {};
+
+    var h = '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>' + esc(gm.abbr) + "</span></nav>" +
+      '<span class="kicker" data-type="gdpr">Related regulation</span>' +
+      '<h1 class="doc-title">' + esc(gm.title) + "</h1>" +
+      '<p class="doc-num">' + esc(gm.abbr) + " · " + esc(gm.cite) + " · " + esc(gm.oj) + "</p>" +
+      '<p class="doc-alt">' + esc(gm.longTitle) + "</p>";
+
+    h += '<ul class="doc-facts" data-type="gdpr">' +
+      "<li>Adopted <b>" + esc(gm.adopted) + "</b></li>" +
+      "<li>Applies from <b>" + esc(gm.applies) + "</b></li>" +
+      "<li><b>" + DATA.gdpr.length + "</b> articles</li>" +
+      "<li>As corrected, " + esc(gm.corrigendum) + "</li>" +
+      '<li><a href="' + esc(gm.sourceUrl) + '" target="_blank" rel="noopener">EUR-Lex ↗</a></li>' +
+      "</ul>";
+
+    var parts = (DATA.gdprChapters || []).map(function (c) {
+      var arts = DATA.gdpr.filter(function (a) { return a.chapter === c.roman; });
+      return { n: c.roman, title: c.title, first: arts[0] && arts[0].id, count: arts.length };
+    });
+    h += '<div class="block"><div class="block-head"><h2>Chapters</h2>' +
+      '<span class="block-count">' + parts.length + "</span></div>" + partGrid("gdpr", parts, "art") + "</div>";
+
+    // The KI-MIG cites the Act; here the Act cites the GDPR, so the list runs
+    // the other way: GDPR articles, and the texts of the Act that reach them.
+    var cited = DATA.gdpr.map(function (a) { return { n: a, from: citedFromAct(a) }; })
+      .filter(function (x) { return x.from.length; });
+    if (cited.length) {
+      h += '<div class="block"><div class="block-head"><h2>Where the Act cites it</h2>' +
+        '<span class="block-count">' + cited.length + "</span>" +
+        '<span class="block-note">GDPR articles the Act and its guidance cite, and from where</span></div>' +
+        '<div class="links">' + cited.map(function (x) {
+          var from = x.from.map(function (e) { return shortLabel(N[e.s]); });
+          return linkRow(x.n, from.length > 3 ? from.slice(0, 3).join(", ") + " +" + (from.length - 3) : from.join(", "));
+        }).join("") + "</div></div>";
+    }
+    return h;
+  }
+
+  /* The citations of a GDPR article from the Act's texts — provisions,
+     recitals, guidance — in the Act's order. */
+  function citedFromAct(n) {
+    return IN[n.id]
+      .filter(function (e) { return N[e.s] && N[e.s].type !== "gdpr"; })
+      .sort(function (a, b) { return actOrder(N[a.s], N[b.s]); });
+  }
+
+  /* Where in its source a citation sits, as each text numbers it: an
+     article's "para. 9", a guideline's "(371)". */
+  function atLabel(e) {
+    return (e.at || []).map(function (p) {
+      var g = /^g(\d+)$/.exec(p);
+      return g ? "(" + g[1] + ")" : "para. " + p.replace(/^p/, "");
+    }).join(", ");
   }
 
   /* ── what changed in 2026 ─────────────────────────────────── */
@@ -879,6 +972,11 @@
         "<i>›</i><span>" + esc(kField(n, "part") + ": " + kField(n, "partTitle")) + "</span>" +
         (n.sub ? "<i>›</i><span>" + esc(kField(n, "sub") + ": " + kField(n, "subTitle")) + "</span>" : "") +
         "</nav>";
+    } else if (n.type === "gdpr") {
+      h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i><a href="#/gdpr">GDPR</a>' +
+        "<i>›</i><span>" + esc(n.chapterLabel) + ": " + esc(n.chapterTitle) + "</span>" +
+        (n.sectionLabel ? "<i>›</i><span>" + esc(n.sectionLabel) + ": " + esc(n.sectionTitle) + "</span>" : "") +
+        "</nav>";
     } else {
       h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>' +
         esc(TYPE_LABEL[n.type]) + "</span></nav>";
@@ -931,6 +1029,11 @@
             : ", but none of the provisions cited has changed since.") +
           "</div>";
       }
+    } else if (n.type === "gdpr") {
+      var gm = DATA.gdprMeta || {};
+      h += '<h1 class="doc-title">' + esc(n.title) + "</h1>" +
+        '<p class="doc-num">Article ' + esc(n.key) + " · " + esc(gm.cite || "") +
+        (n.corrected ? " · as corrected, " + esc(gm.corrigendum || "") : "") + "</p>";
     } else {
       h += '<h1 class="doc-title">' + esc(n.title || n.label) + "</h1>";
       if (n.type !== "recital") h += '<p class="doc-num">' + esc(n.label) + "</p>";
@@ -964,7 +1067,11 @@
       renderGuidanceNav(el.doc, n);
     }
     if (n.type === "kimig") {
-      renderKimigNav(el.doc, n);
+      renderDocNav(el.doc, n, DATA.kimig, "§ ");
+    }
+    if (n.type === "gdpr") {
+      renderCitedByAct(el.doc, n);
+      renderDocNav(el.doc, n, DATA.gdpr, "Art. ");
     }
 
     if (para) {
@@ -984,6 +1091,7 @@
     if (n.type === "annex") return "Annex " + n.roman;
     if (n.type === "guidance") return "Commission guidance";
     if (n.type === "kimig") return "German implementing law";
+    if (n.type === "gdpr") return "GDPR · Article " + n.key;
     return "Defined term";
   }
 
@@ -1117,6 +1225,24 @@
     wireLinks(sec);
   }
 
+  /* The Act's side of a GDPR article: the provisions, recitals and guidance
+     sections that cite it. */
+  function renderCitedByAct(root, n) {
+    var from = citedFromAct(n);
+    if (!from.length) return;
+    var sec = document.createElement("section");
+    sec.className = "block";
+    sec.innerHTML = '<div class="block-head"><h2>Cited by the AI Act</h2>' +
+      '<span class="block-count">' + from.length + "</span>" +
+      '<span class="block-note">provisions, recitals and guidance that cite this article</span></div>' +
+      '<div class="links">' + from.map(function (e) {
+        // straight to the paragraph that cites it, not the top of the provision
+        return linkRow(N[e.s], atLabel(e), e.at && e.at[0]);
+      }).join("") + "</div>";
+    root.appendChild(sec);
+    wireLinks(sec);
+  }
+
   function setKimigLang(lang, n) {
     if (lang === kimigLang) return;
     kimigLang = lang;
@@ -1127,18 +1253,19 @@
     if (btn) btn.focus();
   }
 
-  function renderKimigNav(root, n) {
-    var at = DATA.kimig.findIndex(function (s) { return s.id === n.id; });
-    var prev = at > 0 ? DATA.kimig[at - 1] : null;
-    var next = at >= 0 && at < DATA.kimig.length - 1 ? DATA.kimig[at + 1] : null;
+  /* Previous and next, so a KI-MIG or GDPR reads through without the rail. */
+  function renderDocNav(root, n, list, mark) {
+    var at = list.findIndex(function (s) { return s.id === n.id; });
+    var prev = at > 0 ? list[at - 1] : null;
+    var next = at >= 0 && at < list.length - 1 ? list[at + 1] : null;
     if (!prev && !next) return;
     var sec = document.createElement("section");
     sec.className = "block";
     sec.innerHTML = '<div class="gl-nav">' +
-      (prev ? '<a class="gl-nav-a" href="' + routeOf(prev.id) + '">← § ' + esc(prev.key) +
-        ' <span>' + esc(lede(kField(prev, "title"), 46)) + "</span></a>" : "<span></span>") +
-      (next ? '<a class="gl-nav-a gl-nav-next" href="' + routeOf(next.id) + '">§ ' + esc(next.key) +
-        ' <span>' + esc(lede(kField(next, "title"), 46)) + "</span> →</a>" : "") +
+      (prev ? '<a class="gl-nav-a" href="' + routeOf(prev.id) + '">← ' + esc(mark + prev.key) +
+        ' <span>' + esc(lede(nodeTitle(prev), 46)) + "</span></a>" : "<span></span>") +
+      (next ? '<a class="gl-nav-a gl-nav-next" href="' + routeOf(next.id) + '">' + esc(mark + next.key) +
+        ' <span>' + esc(lede(nodeTitle(next), 46)) + "</span> →</a>" : "") +
       "</div>";
     root.appendChild(sec);
   }
@@ -1244,7 +1371,7 @@
 
     h += '<div class="conn-pane" data-pane="in"' + (connTab === "in" ? "" : " hidden") + ">" +
       (ins.length ? '<div class="links">' + ins.map(function (e) {
-        return linkRow(N[e.s], KIND_LABEL[e.k] || e.k);
+        return linkRow(N[e.s], KIND_LABEL[e.k] || e.k, e.at && e.at[0]);
       }).join("") + "</div>" : '<p class="empty">Nothing points here.</p>') + "</div>";
 
     el.conn.innerHTML = h;
@@ -1280,9 +1407,10 @@
     return (na.num - nb.num) || String(na.id).localeCompare(String(nb.id));
   }
 
-  function linkRow(n, kind) {
+  function linkRow(n, kind, para) {
     if (!n) return "";
-    return '<button class="link" type="button" data-id="' + n.id + '">' +
+    return '<button class="link" type="button" data-id="' + n.id + '"' +
+      (para ? ' data-para="' + esc(para) + '"' : "") + ">" +
       '<span class="link-id" data-type="' + n.type + '">' + esc(shortLabel(n)) + "</span>" +
       '<span class="link-title">' + esc(nodeTitle(n, 60)) + "</span>" +
       (kind ? '<span class="link-kind">' + esc(kind) + "</span>" : "") +
@@ -1299,6 +1427,7 @@
     if (n.type === "annex") return "Annex " + n.roman;
     if (n.type === "guidance") return (n.doc === "pp" ? "Proh." : "HR") + " § " + n.sec;
     if (n.type === "kimig") return "KI-MIG § " + n.key;
+    if (n.type === "gdpr") return "GDPR Art. " + n.key;
     return "Term " + n.num;
   }
 
@@ -1310,7 +1439,9 @@
 
   function wireLinks(root) {
     root.querySelectorAll(".link").forEach(function (b) {
-      b.addEventListener("click", function () { go(routeOf(b.dataset.id)); });
+      b.addEventListener("click", function () {
+        go(routeOf(b.dataset.id) + (b.dataset.para ? "/" + b.dataset.para : ""));
+      });
       b.addEventListener("mouseenter", function (ev) { tipForNode(N[b.dataset.id], ev); });
       b.addEventListener("mouseleave", function () { tipForNode(null); });
     });
@@ -1324,8 +1455,11 @@
     if (!root) return;
     linkifyRefs(root, selfId);
     // The German KI-MIG has none of the Act's English terms to find; its
-    // references to the Act arrive already linked in either language.
-    if (!(N[selfId] && inGerman(N[selfId]))) linkifyTerms(root, selfId);
+    // references to the Act arrive already linked in either language. The
+    // GDPR has the words but not the meanings: its 'personal data' is its own
+    // Article 4, not the Act's definition that points there.
+    var self = N[selfId];
+    if (!(self && (inGerman(self) || self.type === "gdpr"))) linkifyTerms(root, selfId);
     root.querySelectorAll(".xref").forEach(function (a) {
       a.addEventListener("mouseenter", function (ev) { tipForNode(N[a.dataset.node], ev); });
       a.addEventListener("mouseleave", function () { tipForNode(null); });
@@ -1359,11 +1493,31 @@
 
   var REF_RE = /\bArticles?\s+(\d{1,3})(\(\d{1,2}\))?|\bAnnexes?\s+(X{0,3}(?:IX|IV|V?I{0,3}))\b|\bRecitals?\s+(\d{1,3})\b|\bSections?\s+(\d{1,2}(?:\.\d{1,2}){1,3})\b/g;
 
-  // "Article 4(4) of Regulation (EU) 2016/679" is the GDPR, not the Act.
-  var OTHER_ACT_RE = /^\s*(?:\(\d+\)|\([a-z]+\)|,|and|or|to|first|second|third|subparagraphs?|points?|\d{1,3}|\s)*of\s+(?:Regulation|Directive|Decision|the\s+Charter|the\s+Treaty|Council)/;
+  // "Article 4(4) of Regulation (EU) 2016/679" is the GDPR, not the Act. This
+  // is parse.py's DEFLECT_RE and cited_act(), so the links on the page are the
+  // edges in the graph: what may follow a reference and hand it to an act.
+  var DEFLECT_RE = /^(?:\(\d+\)|\([a-z]+\)|,|first|second|third|fourth|subparagraph|points?|and|or|to|Articles?|\d{1,3}|\s)*(?:(?:of|to)\s+(?:(that)\s+|the\s+[A-Z]{2,8}\s+)?(?:Delegated\s+|Implementing\s+)?(?:Regulation|Directive|Decision|the\s+Charter|the\s+Treaty|Council)|\(?(TFEU|TEU|GDPR|EUDPR|LED|DSA|DMA|UCPD|CCD|ECHR|CER|Charter)\b|(thereof))/;
+  var CORPUS_CELEX = { "2024/1689": "aia", "2016/679": "gdpr" };
+
+  /* "self" when a reference names no act, "aia" or "gdpr" when it names one
+     in the corpus, null for any other act. */
+  function citedAct(tail, amending) {
+    var m = DEFLECT_RE.exec(tail.slice(0, 90));
+    if (!m) return "self";
+    if (m[2]) return m[2] === "GDPR" ? "gdpr" : null;
+    if (m[1] || m[3]) return amending ? "self" : null;
+    var named = tail.slice(m[0].length, m[0].length + 20);
+    for (var celex in CORPUS_CELEX) if (named.indexOf(celex) >= 0) return CORPUS_CELEX[celex];
+    return null;
+  }
+
+  // The Act cites GDPR definitions by point: "Article 4, point (4), of …".
+  var POINT_RE = /^,?\s*point\s+\((\d{1,2})\)/;
 
   function linkifyRefs(root, selfId) {
-    var selfDoc = N[selfId] && N[selfId].type === "guidance" ? N[selfId].doc : null;
+    var self = N[selfId];
+    var selfDoc = self && self.type === "guidance" ? self.doc : null;
+    var ownAct = self && self.type === "gdpr" ? "gdpr" : "aia";
     textNodes(root).forEach(function (t) {
       var s = t.nodeValue;
       REF_RE.lastIndex = 0;
@@ -1373,12 +1527,22 @@
       var frag = document.createDocumentFragment(), last = 0, m;
       while ((m = REF_RE.exec(s))) {
         var id = null, para = null;
-        if (m[1]) {
+        var tail = s.slice(m.index + m[0].length);
+        var act = m[5] ? null : citedAct(tail, self && self.amending);
+        if (act === "self") act = ownAct;
+        if (m[1] && act === "gdpr") {
+          id = "gdpr_" + parseInt(m[1], 10);
+          var pt = POINT_RE.exec(tail);
+          var num = m[2] ? parseInt(m[2].slice(1, -1), 10) : pt && pt[1];
+          // Article 4 numbers points, not paragraphs: "Article 4(4) GDPR" is
+          // its point (4).
+          if (num) para = N[id] && N[id].html.indexOf('id="p' + num + '"') >= 0 ? "p" + num : "pt" + num;
+        } else if (m[1] && act === "aia") {
           id = "art_" + parseInt(m[1], 10);
           if (m[2]) para = "p" + parseInt(m[2].slice(1, -1), 10);
-        } else if (m[3] && ROMAN_ORD[m[3]]) {
+        } else if (m[3] && act === "aia" && ROMAN_ORD[m[3]]) {
           id = "anx_" + m[3];
-        } else if (m[4]) {
+        } else if (m[4] && act === "aia") {
           id = "rct_" + parseInt(m[4], 10);
         } else if (m[5] && selfDoc) {
           // Inside the guidelines, "Section 2.7.1" is a section of the same
@@ -1386,7 +1550,6 @@
           id = "gdl_" + selfDoc + "-" + m[5];
         }
         if (!id || !N[id] || id === selfId) continue;
-        if ((m[1] || m[3] || m[4]) && OTHER_ACT_RE.test(s.slice(m.index + m[0].length))) continue;
 
         if (m.index > last) frag.appendChild(document.createTextNode(s.slice(last, m.index)));
         var a = document.createElement("a");
@@ -1470,6 +1633,7 @@
 
   function neighbourhood(id, depth, show) {
     var keep = {}, frontier = [id];
+    var inGdpr = N[id].type === "gdpr";
     keep[id] = 0;
     for (var d = 1; d <= depth; d++) {
       var next = [];
@@ -1483,7 +1647,9 @@
           // 'provider' is used by 161 provisions and a guidance section can
           // cite thirty articles, so hopping through either would drag in
           // most of the Act and call it a neighbourhood.
-          if (!LEAF_TYPES[N[other].type]) next.push(other);
+          // The GDPR is a statute of its own: the walk does not cross into it
+          // from the Act, nor out of it into the Act.
+          if (!LEAF_TYPES[N[other].type] && (N[other].type === "gdpr") === inGdpr) next.push(other);
         });
       });
       frontier = next;
@@ -1539,11 +1705,11 @@
   var COLLECTION = {
     article: "articles", recital: "recitals",
     annex: "annexes", definition: "definitions", guidance: "guidance",
-    kimig: "kimig"
+    kimig: "kimig", gdpr: "gdpr"
   };
 
   function docGraph(doc, show) {
-    var own = doc === "kimig" ? DATA.kimig
+    var own = doc === "kimig" || doc === "gdpr" ? DATA[doc]
       : DATA.guidance.filter(function (g) { return "gdl-" + g.doc === doc; });
     var set = {};
     own.forEach(function (n) {

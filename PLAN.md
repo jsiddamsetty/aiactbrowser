@@ -24,6 +24,10 @@ The portal is a static site (vanilla JS, no build step for the frontend):
   `def_48`) and the obvious starting point for MaRisk's German patterns in
   Phase 5. Phase 1 must migrate it: `kimig_2` → `kimig:par_2`, route
   `#/kimig/2` kept as a redirect.
+- `build/parse_gdpr.py` — the GDPR, added ahead of Phases 1–2. Like the
+  KI-MIG it rides the single-corpus scheme: `gdpr_4` ids inside `aiact.json`,
+  routes `#/gdpr/4`. It runs `parse_consolidated` on the EUR-Lex consolidated
+  export. Phase 1 must migrate it too: `gdpr_4` → `gdpr:art_4`.
 - `build/build.py` — assembles `data/aiact.json` (the Act + graph) and
   `data/changes.json` (the Digital Omnibus redlines). Run: `python3 build/build.py`.
 - `assets/app.js` — hash-routed SPA (`#/article/4`, `#/term/52`, `#/graph`…),
@@ -41,16 +45,20 @@ has a deflection guard, `deflected()` in `build/parse.py`. It recognizes when
 
 - named instruments: "of Regulation (EU) 2016/679", "of Directive …",
   "of the Charter", "of the CER Delegated Regulation" — external unless the
-  named act is 2024/1689 itself (`SELF_CELEX`);
+  named act is in the corpus (`CORPUS_CELEX`: 2024/1689 is the Act, 2016/679
+  the GDPR);
 - the guidelines' trailing abbreviations: GDPR, LED, EUDPR, DSA, DMA, UCPD,
   CCD, ECHR, CER, TFEU, TEU, Charter (list inside `DEFLECT_RE`);
 - "of that Regulation" / "thereof" — external in the Act's own text,
   self-referential in the omnibus recitals (`amending=True`).
 
-Today the guard *discards* what it detects. The centerpiece of this plan is
-that it becomes a **router**: the same match that today drops
-"Article 4(4) of Regulation (EU) 2016/679" should, once GDPR is in the
-corpus, resolve to that GDPR article instead.
+The guard has started becoming a **router**. `cited_act()` returns which act a
+reference names: `"self"`, a corpus slug, or `None`. `article_refs(…, doc=,
+to=)` returns any corpus act's articles, so "Article 4(4) of Regulation (EU)
+2016/679" and "Article 35 GDPR" now resolve to GDPR articles. `deflected()`
+remains as the Act's yes/no view of the same test, and `app.js` mirrors the
+regex (`citedAct()`) for in-text links. References to acts outside the corpus
+are still discarded; those are what Phase 2 has left to do.
 
 Known limitation to carry forward: bare contextual citations — in
 `gdl_pp-3.6`, "(Articles 26 and 38 …)" and "(Article 27)" mean DSA articles
@@ -87,7 +95,12 @@ the diff whenever `deflected()`/`article_refs` change:
 - singular annex matches at all: `annex_refs("listed in Annex III")` →
   `["anx_III"]` (the `Annexes?` bug);
 - lettered articles: "Article 4a" → `["art_4a"]`;
-- range expansion still works: "Articles 8 to 15" → 8..15.
+- range expansion still works: "Articles 8 to 15" → 8..15;
+- … but only between the numbers "to" joins: "Articles 9 to 15 and 17 to 25"
+  skips 16 (fixed with the GDPR ingest, which dropped `art_2 cites art_16`);
+- routed: `article_refs("… Article 4, point (4), of Regulation (EU)
+  2016/679", to="gdpr")` → `["gdpr_4"]`; "Article 35 GDPR" → `gdpr_35`;
+  inside the GDPR (`doc="gdpr"`) a bare "Article 6(1)" → `gdpr_6`.
 
 ## Phase 1 — namespacing refactor (no new content)
 
@@ -114,6 +127,9 @@ Acceptance: site behaves identically for the AI Act; old URLs redirect;
 stripped, is empty.
 
 ## Phase 2 — the deflection guard becomes a router; external stubs
+
+*Partly done with the GDPR ingest: `cited_act()` routes references to acts in
+the corpus. External stubs, the override table and the UI toggle remain.*
 
 Ship this *before* ingesting new corpora — it is a visible win on its own.
 
@@ -185,6 +201,19 @@ licensing or accounts. Follow the existing naming convention
 
 ## Phase 3 — GDPR ingest (cheapest corpus, richest cross-links)
 
+*Done, ahead of Phases 1–2.* What was built differs from the notes below:
+
+- The source is the EUR-Lex **consolidated** export (`build/source-gdpr.html`,
+  04.05.2016, corrigendum worked in), so there are **no recitals** yet. They
+  need the OJ export, as the AI Act's do.
+- Article 4's definitions stay inside the article as addressable points
+  (`#/gdpr/4/pt4`), not as term nodes.
+- The corrigendum's ▼C1 marks are stripped rather than shown as amendments.
+
+Payoff checked: `def_52` (profiling) cites `gdpr_4`. The Act's texts make 35
+references into 6 GDPR articles: 4, 6, 9, 22, 35 and 36. EDPB guidance is still
+to do.
+
 - Source: EUR-Lex CONVEX HTML for 32016R0679, same markup `parse.py` reads.
   GDPR has 99 articles, 173 recitals, no annexes; definitions live in
   Article 4 (not Article 3 — parameterize `parse_definitions`, which
@@ -254,7 +283,7 @@ Different in kind from the EUR-Lex corpora; budget the most time here.
 0. Regression guard — done (edge diff in `build.py`).
 1. Namespacing — medium refactor, touches build + app.js routing.
 2. Router + stubs — medium, mostly `parse.py`/`build.py`, small UI additions.
-3. GDPR — small-medium (parser reuse is high).
+3. GDPR — done for the articles; recitals and EDPB guidance remain.
 4. DORA — small-medium.
 5. MaRisk/BaFin — large (new parser, language, editorial concordance).
 

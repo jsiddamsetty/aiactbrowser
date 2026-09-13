@@ -35,6 +35,7 @@ build/parse.py                reader for Official Journal (fmx) markup
 build/parse_consolidated.py   reader for consolidated (clg) markup
 build/parse_guidelines.py     reader for the Commission guidelines (PDF)
 build/parse_kimig.py          reader for the KI-MIG (gesetze-im-internet XML)
+build/parse_gdpr.py           reader for the GDPR (consolidated markup)
 build/source-oj.html          Regulation (EU) 2024/1689 as first published
 build/source-consolidated.html  the same Act, consolidated to 27.07.2026
 build/source-omnibus.html     Regulation (EU) 2026/1744, the amending act
@@ -43,6 +44,7 @@ build/source-guidelines-highrisk-principles.pdf  ┐ draft Art. 6 guidelines,
 build/source-guidelines-highrisk-annex3.pdf      ┘ consultation version
 build/source-kimig.xml        KI-MIG, BGBl. 2026 I Nr. 223 (German law)
 build/translations/kimig-en/  its unofficial English translation, per section
+build/source-gdpr.html        Regulation (EU) 2016/679, consolidated 04.05.2016
 ```
 
 ## Data
@@ -58,7 +60,8 @@ gesetze-im-internet.de for the KI-MIG. Nothing is hand-typed.
 | Defined terms (Article 3) | 68 |
 | Guidance sections | 178 &nbsp;*(110 prohibited practices + 68 high-risk)* |
 | KI-MIG sections | 20 &nbsp;*(citing 49 provisions of the Act)* |
-| Connections | ~3 100 |
+| GDPR articles | 99 &nbsp;*(6 of them cited from the Act's side)* |
+| Connections | ~3 400 |
 | Provisions changed in 2026 | 46 |
 
 Three sources, two different markups. The consolidated export uses EUR-Lex's
@@ -138,8 +141,9 @@ boxes and footnotes preserved. Sections appear in the reader under a
 Article 6, Annex III, and the Article 3 terms they turn on), in the citation
 graph, in search, and each as its own document in the contents rail. Literal mentions of
 articles, annexes and recitals inside a guidance section become ordinary graph
-edges — references deflected to other instruments ("Article 4(4) of Regulation
-(EU) 2016/679") are recognised and left unlinked.
+edges. A reference to the GDPR ("Article 4(4) of Regulation (EU) 2016/679",
+"Article 35 GDPR") links to that GDPR article; references to any other
+instrument are recognised and left unlinked.
 
 The only non-HTML source: these exist solely as PDFs, so
 `build/parse_guidelines.py` recovers structure from typography (body text,
@@ -221,6 +225,65 @@ tab's session. Search matches either language.
 section says so, and names the cited provisions that have changed since
 (Article 27).
 
+## The GDPR
+
+**Regulation (EU) 2016/679**, the General Data Protection Regulation, is the
+act the AI Act leans on most. The Act defines *personal data*, *profiling* and
+*special categories of personal data* by pointing at GDPR Articles 4 and 9, and
+lets deployers reuse their GDPR impact assessment (Articles 26 and 27). The
+GDPR's 99 articles (`#/gdpr/35`) are read from the EUR-Lex consolidated
+export. It uses the same `clg` markup as the Act, so `parse_consolidated.py`
+reads it. The GDPR gets:
+
+- its own home page (`#/gdpr`);
+- its chapters in the contents rail;
+- a *Related regulation* card on the Act's home page;
+- a **Cited by the AI Act** block on every GDPR article that the Act, its
+  recitals or the guidelines cite. Each entry opens the paragraph the citation
+  sits in, highlighted, such as Article 26(9) or guideline paragraph (371). So
+  do backlinks into the GDPR. The build records those paragraphs on the edge
+  (`at`).
+
+`build/parse_gdpr.py` prints what each article cites.
+
+### How references reach it
+
+The deflection guard used to recognise a reference to another act and drop
+it. `cited_act()` in `build/parse.py` now says *which* act a reference names,
+and a reference naming the GDPR lands on the GDPR:
+
+- "Article 4, point (4), of Regulation (EU) 2016/679" → the profiling
+  definition, point (4) of GDPR Article 4 (`#/gdpr/4/pt4`);
+- "Article 35 GDPR", the guidelines' shorthand → GDPR Article 35, and
+  "Article 9(1) GDPR" → its paragraph 1. "Article 4(4) GDPR" → point (4),
+  since Article 4 numbers points, not paragraphs;
+- inside the GDPR, a bare "Article 6(1)" → GDPR Article 6, paragraph 1;
+- "Article 27 of Directive (EU) 2016/680", "Article 27 LED", or any other
+  act outside the corpus → plain text.
+
+`citedAct()` in `app.js` is the same test, so the links on a page are the
+edges in the graph. Before, the page and the graph disagreed on shorthand
+like "Article 35 GDPR" or "Article 16 TFEU". The graph dropped those
+references, but the page linked them to the Act's article with the same
+number. Now neither does.
+
+### What is and isn't here
+
+- **No recitals.** A consolidated text never reproduces the preamble, so the
+  GDPR's 173 recitals would need the Official Journal export, the same way
+  the Act's recitals come from `source-oj.html`.
+- **The corrigendum** (OJ L 127, 23.5.2018) is worked into the text. EUR-Lex
+  marks its corrections ▼C1 in eight articles. They correct the text as
+  published rather than amend it, so the page doesn't mark them as changes.
+  Those articles just say *as corrected*.
+- **Definitions stay inside Article 4** rather than becoming term nodes. The
+  Act cites them by point, and each point can be addressed. The Act's own
+  defined terms aren't linked inside the GDPR: the words are the same, but
+  the GDPR gives them its own meanings.
+- **In the graph, the GDPR is a separate statute.** Walking from a provision
+  of the Act, a GDPR article is a leaf, and the reverse holds too. So a
+  neighbourhood stays inside the text you are reading.
+
 ## The changes page
 
 `#/changes` shows what Regulation (EU) 2026/1744 did to the Act: **6 articles
@@ -270,13 +333,13 @@ of EUR-Lex source documents and the parsers out of the deployment. Pushing to
 
 - `/` focuses search · `g` opens the graph · `Esc` closes overlays
 - The contents rail shows one document at a time, picked from the menu at its
-  top: the AI Act (with Articles · Recitals · Annexes · Terms tabs), each
-  Commission guideline, or the KI-MIG. Picking one opens its home page. The
+  top: the AI Act (with Articles · Recitals · Annexes · Terms tabs), the GDPR,
+  each Commission guideline, or the KI-MIG. Picking one opens its home page. The
   rail follows the reader — opening a
   KI-MIG section switches it to the KI-MIG — and remembers the Act's tab while
   another document is showing. A new corpus is one more menu entry
   (`docList()` in `app.js`), not another tab
-- Each attached document has its own home page — `#/guidance/pp`,
+- Each attached document has its own home page — `#/gdpr`, `#/guidance/pp`,
   `#/guidance/hr`, `#/kimig` — reached from its name in the breadcrumb of any
   of its sections and from the cards on the Act's home page. It lists the
   document's parts, what it interprets (guidelines) or which provisions of the
@@ -311,7 +374,12 @@ protanopia, deuteranopia and tritanopia (worst-case ΔE 13.9 light / 10.8 dark,
 OKLab ×100, Machado 2009 simulation), each clearing 3:1 against its surface.
 The KI-MIG ochre/gold (`#7D5800` light / `#FEC748` dark) was chosen by the same
 test against all five existing hues and the ink greys: worst case ΔE 11.5 light
-/ 16.2 dark, text contrast 6.4:1 / 10.7:1. The guidance violet predates that
+/ 16.2 dark, text contrast 6.4:1 / 10.7:1. The GDPR forest green (`#17412C`
+light / `#A7D8C1` dark) was chosen by the same test, searching light and dark
+shades of one hue together. Its worst case against the six existing hues is
+ΔE 12.8 light / 13.7 dark, in both modes against the KI-MIG ochre under
+protanopia. It sits at least ΔE 8.4 from the ink greys, with text contrast
+11.5:1 / 10.5:1. The guidance violet predates that
 check and does not pass it — under protanopia it sits ΔE 1.9 from the article
 blue — so the text labels carry that distinction. Colour never carries meaning alone — every node and connection is also
 labelled in text. Dark mode uses its own validated steps rather than inverted
@@ -329,7 +397,8 @@ The KI-MIG is a German federal statute and, as an official work, not subject
 to copyright (§ 5 UrhG); it is reproduced from
 [gesetze-im-internet.de](https://www.gesetze-im-internet.de/ki-mig/).
 
-The texts of Regulation (EU) 2024/1689 and Regulation (EU) 2026/1744 are
+The texts of Regulation (EU) 2024/1689, Regulation (EU) 2026/1744 and
+Regulation (EU) 2016/679 are
 © European Union, reproduced from [EUR-Lex](https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng);
 reuse is authorised under Decision 2011/833/EU provided the source is
 acknowledged. Consolidated texts carry no legal value — this is an unofficial
