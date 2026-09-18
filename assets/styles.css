@@ -1,11 +1,77 @@
 /* ============================================================
    AI Act Browser
-   Type    : IBM Plex — serif is the law, sans is the tool,
+   Type    : Open Sans + IBM Plex — serif is the law, sans is the tool,
              mono is the citation machinery.
    Colour  : EU institutional blue anchors the interface; the four
              node types use a categorical palette validated for
              colour-vision deficiency at all pairs, in both modes.
    ============================================================ */
+
+/* Open Sans is hosted with the application: the reader makes no runtime
+   request to a third-party font service. The Latin-extended face covers the
+   German text and the Latin face keeps the everyday UI payload compact. */
+@font-face {
+  font-family: "Open Sans";
+  font-style: normal;
+  font-weight: 300 800;
+  font-display: swap;
+  src: url("/assets/fonts/open-sans-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Open Sans";
+  font-style: normal;
+  font-weight: 300 800;
+  font-display: swap;
+  src: url("/assets/fonts/open-sans-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Serif";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/assets/fonts/ibm-plex-serif-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Serif";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/assets/fonts/ibm-plex-serif-400-italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Serif";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/assets/fonts/ibm-plex-serif-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/assets/fonts/ibm-plex-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/assets/fonts/ibm-plex-mono-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/assets/fonts/ibm-plex-mono-600.woff2") format("woff2");
+}
 
 :root {
   /* surfaces & ink */
@@ -26,6 +92,8 @@
   --c-guidance:   #6A40D8;
   --c-kimig:      #7D5800;
   --c-gdpr:       #17412C;
+  --c-module:     #8A3D15;
+  --c-external:   #767C8A;
 
   --c-article-bg:    #1F4FCC14;
   --c-recital-bg:    #CC6F0014;
@@ -34,12 +102,14 @@
   --c-guidance-bg:   #6A40D814;
   --c-kimig-bg:      #7D580014;
   --c-gdpr-bg:       #17412C14;
+  --c-module-bg:     #8A3D1514;
+  --c-external-bg:   #767C8A14;
 
   --accent:     var(--c-article);
   --focus:      #1F4FCC;
 
   /* type */
-  --sans:  "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --sans:  "Open Sans", ui-sans-serif, system-ui, sans-serif;
   --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
   --mono:  "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
@@ -69,6 +139,8 @@
   --c-guidance:   #9678EC;
   --c-kimig:      #FEC748;
   --c-gdpr:       #A7D8C1;
+  --c-module:      #F59E72;
+  --c-external:    #A5AAB4;
 
   --c-article-bg:    #4D68DC24;
   --c-recital-bg:    #AF860024;
@@ -77,6 +149,8 @@
   --c-guidance-bg:   #9678EC24;
   --c-kimig-bg:      #FEC74824;
   --c-gdpr-bg:       #A7D8C124;
+  --c-module-bg:      #F59E7224;
+  --c-external-bg:    #A5AAB424;
 
   --focus: #7B93F0;
   --shadow: 0 1px 2px #0006, 0 8px 24px -12px #0009;
@@ -391,6 +465,13 @@ button { font: inherit; color: inherit; }
 
 .reader { min-width: 0; }
 
+/* Portal-wide views compare several instruments, so document-specific rails
+   yield the canvas to the comparison instead of competing with it. */
+.portal-wide .layout { grid-template-columns: minmax(0, 1fr); }
+.portal-wide .rail-left, .portal-wide .rail-right { display: none; }
+.portal-wide .doc { max-width: 1440px; }
+.portal-wide .rail-toggle, .portal-wide .links-toggle { display: none; }
+
 .doc {
   max-width: 74ch;
   margin: 0 auto;
@@ -669,6 +750,8 @@ sup.fn:hover { color: var(--accent); }
 [data-type="guidance"]   { --c: var(--c-guidance); }
 [data-type="kimig"]      { --c: var(--c-kimig); }
 [data-type="gdpr"]       { --c: var(--c-gdpr); }
+[data-type="module"]     { --c: var(--c-module); }
+[data-type="external"]   { --c: var(--c-external); }
 .kicker[data-type], .link-id[data-type], .res-id[data-type] { color: var(--c); }
 .kicker[data-type="article"]    { background: var(--c-article-bg); }
 .kicker[data-type="recital"]    { background: var(--c-recital-bg); }
@@ -677,6 +760,8 @@ sup.fn:hover { color: var(--accent); }
 .kicker[data-type="guidance"]   { background: var(--c-guidance-bg); }
 .kicker[data-type="kimig"]      { background: var(--c-kimig-bg); }
 .kicker[data-type="gdpr"]       { background: var(--c-gdpr-bg); }
+.kicker[data-type="module"]      { background: var(--c-module-bg); }
+.kicker[data-type="external"]    { background: var(--c-external-bg); }
 
 /* ── graph rail ────────────────────────────────────────────── */
 
@@ -828,6 +913,12 @@ sup.fn:hover { color: var(--accent); }
   letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--ink-3); margin-bottom: 14px;
 }
+.data-checked {
+  font-family: var(--sans) !important;
+  font-size: 12px !important; line-height: 1.45 !important;
+  color: var(--ink-3) !important; margin-top: 18px !important;
+}
+.data-checked time { font-weight: 600; color: var(--ink-2); }
 .home-hero h1 {
   font-family: var(--serif);
   font-size: clamp(34px, 5vw, 54px);
@@ -1316,7 +1407,7 @@ sup.fn:hover { color: var(--accent); }
 
 /* sub-headings inside a section: "a) Narrow procedural task" */
 .gl-h3 {
-  font-family: var(--sans); font-size: 14px; font-weight: 600;
+  font-family: var(--sans); font-size: 18px; line-height: 1.35; font-weight: 700;
   color: var(--ink); margin: 22px 0 10px;
 }
 
@@ -1353,6 +1444,84 @@ sup.fn:hover { color: var(--accent); }
 .gcard[data-kind="kimig"] .gcard-name { color: var(--c-kimig); }
 .gcard[data-kind="gdpr"]:hover { border-color: var(--c-gdpr); }
 .gcard[data-kind="gdpr"] .gcard-name { color: var(--c-gdpr); }
+
+/* ── multi-instrument portal ─────────────────────────────── */
+.portal-actions { display:grid; grid-template-columns:minmax(0,520px); gap:12px; margin:28px 0; }
+.portal-card { display:flex; flex-direction:column; gap:7px; padding:18px; border:1px solid var(--line); border-radius:10px; color:var(--ink); text-decoration:none; background:var(--panel); }
+.portal-card:hover { border-color:var(--accent); box-shadow:0 6px 22px color-mix(in srgb,var(--accent) 10%,transparent); }
+.portal-card b { font:600 17px var(--sans); }
+.portal-card span { color:var(--ink-2); font-size:13px; }
+.marisk-note { border-left:2px solid var(--c-module); margin:12px 0; padding:2px 0 2px 16px; color:var(--ink-2); background:var(--c-module-bg); }
+.dora-ai-scope { max-width:76ch; color:var(--ink-2); font:400 20px/1.55 var(--serif); }
+.dora-ai-caveat { display:flex; flex-direction:column; gap:5px; max-width:82ch; margin:24px 0 34px; padding:14px 16px; border-left:3px solid var(--c-module); border-radius:0 8px 8px 0; background:var(--c-module-bg); color:var(--ink-2); font-size:13px; line-height:1.5; }
+.dora-ai-caveat b { color:var(--ink); font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
+.dora-ai-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:12px; }
+.dora-ai-cards article { display:flex; flex-direction:column; gap:10px; min-height:220px; padding:18px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
+.dora-ai-cards h3 { margin:0; font-size:17px; line-height:1.25; }.dora-ai-cards p { margin:0; color:var(--ink-2); font-size:13px; line-height:1.5; }
+.dora-ai-cards .dora-ai-when { color:var(--ink); }.dora-ai-when b { display:block; margin-bottom:3px; color:var(--c-module); font-size:10px; text-transform:uppercase; letter-spacing:.07em; }
+.dora-ai-cards .relation-basis { margin-top:auto; }
+.dora-ai-browse { margin:18px 0 0; color:var(--ink-3); font-size:12px; }
+
+.portal-hero { max-width:78ch; }
+.map-key { display:flex; flex-wrap:wrap; gap:12px 22px; color:var(--ink-2); font-size:12px; margin:0 0 16px; }
+.map-key span { display:flex; align-items:center; gap:7px; }
+.key-line { display:inline-block; width:32px; height:0; border-top:1px solid var(--ink-3); }
+.key-line.legal { border-top:3px solid var(--accent); }
+.imap-wrap { overflow:auto; border:1px solid var(--line); border-radius:12px; background:var(--panel); }
+.imap { width:100%; min-width:900px; display:block; }
+.imap-band { fill:color-mix(in srgb,var(--paper) 75%,var(--panel)); stroke:var(--line); stroke-width:.6; }
+.imap-band-label { fill:var(--ink-2); font:600 13px var(--sans); text-transform:uppercase; letter-spacing:.05em; }
+.imap-edge { fill:none; stroke:var(--ink-3); opacity:.58; transition:stroke-width .14s, opacity .14s, stroke .14s; }
+.imap-legal { stroke:var(--accent); stroke-width:2.4; }
+.imap-edge-hit { stroke:var(--paper); stroke-opacity:.01; stroke-width:24; pointer-events:stroke; }
+.imap-relation { cursor:pointer; outline:none; }
+.imap-relation:hover .imap-edge,.imap-relation:focus .imap-edge,.imap-relation.is-active .imap-edge { stroke:var(--c-guidance); stroke-width:5; opacity:1; }
+.imap-relation:focus-visible .imap-edge { stroke:var(--focus); stroke-width:5; opacity:1; }
+.imap marker path { fill:var(--accent); }
+.imap-node { cursor:pointer; }.imap-node.is-static { cursor:default; opacity:.76; }.imap-node rect { fill:var(--panel); stroke:var(--accent); stroke-width:1.4; }
+.imap-node text { fill:var(--ink); font:600 13px var(--sans); pointer-events:none; }
+.imap-node .imap-sub { fill:var(--ink-2); font-size:10px; font-weight:400; }
+.imap-node.is-root rect { fill:var(--c-article-bg); stroke-width:3; }
+.imap-node.is-root text { font-size:16px; }.imap-node.is-hub rect { stroke-width:2.5; }
+.imap-node.is-stub rect { stroke:var(--ink-3); stroke-dasharray:4 3; fill:var(--paper); }
+.imap-node.is-authority rect { rx:28px; stroke:var(--c-module); }
+.imap-node:focus rect,.imap-node:hover rect { stroke-width:3; }
+.relation-basis { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding-top:10px; border-top:1px solid var(--rule-2); font-size:11px; }
+.relation-basis b { color:var(--ink-3); text-transform:uppercase; letter-spacing:.05em; margin-right:2px; }
+.relation-basis a { color:var(--accent); background:var(--c-article-bg); border-radius:5px; padding:3px 6px; text-decoration:none; }
+.relation-basis a:hover { text-decoration:underline; }
+.map-detail { min-height:110px; margin-top:14px; border:1px solid var(--line); border-radius:10px; background:var(--panel); padding:18px; }
+.map-detail-prompt { margin:0; color:var(--ink-3); }
+.map-detail-head { display:flex; flex-wrap:wrap; align-items:baseline; gap:9px; }
+.map-detail-head p { margin:0; padding:3px 7px; border-radius:999px; background:var(--c-guidance-bg); color:var(--c-guidance); font-size:11px; font-weight:600; }
+.map-detail-head h3 { margin:0; font-size:18px; }.map-detail-head h3 span { color:var(--accent); }
+.map-detail-copy { max-width:74ch; margin:8px 0 14px; color:var(--ink-2); }
+.map-detail-mechanisms { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:10px; margin-top:18px; }
+.map-detail-mechanisms > h4 { grid-column:1 / -1; margin:0; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-3); }
+.map-detail-mechanisms article { padding:12px; border:1px solid var(--rule); border-radius:8px; background:var(--paper); }
+.map-detail-mechanisms h5 { display:inline; margin:0; font-size:13px; }
+.map-detail-mechanisms article > span { margin-left:6px; color:var(--c-guidance); font-size:11px; }
+.map-detail-mechanisms article > p { margin:7px 0 12px; color:var(--ink-2); font-size:12px; line-height:1.45; }
+.map-detail-state { margin:14px 0 0; color:var(--ink-3); font-size:11px; }
+
+.legal-effect article { border-left:2px solid var(--accent); padding:8px 12px; background:var(--c-article-bg); }
+.legal-effect article p { color:var(--ink-2); margin:6px 0; }
+.topic-badges { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+.topic-badges span { padding:5px 9px; border-radius:999px; background:var(--c-article-bg); color:var(--accent); font-size:12px; }
+.ov-family-label { align-self:center; margin-left:8px; color:var(--ink-2); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+.edge-filter { border:1px solid var(--line); border-radius:999px; background:var(--panel); color:var(--ink); padding:5px 9px; font:500 11px var(--sans); cursor:pointer; }
+.edge-filter.is-off { opacity:.42; text-decoration:line-through; }
+
+@media (max-width: 900px) {
+  .nav-wide { display:none; }
+  .portal-actions { grid-template-columns:1fr; }
+  .portal-wide .doc { padding:28px 24px 30vh; }
+  .imap { min-width:760px; }
+}
+
+@media (max-width: 560px) {
+  .map-detail { padding:14px; }
+}
 .gcard-top { display: flex; align-items: center; gap: 8px; width: 100%; justify-content: space-between; }
 .gcard-name {
   font-family: var(--mono); font-size: 10.5px; font-weight: 500;

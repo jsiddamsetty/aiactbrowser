@@ -400,6 +400,7 @@ def parse_events(body_lines):
     """
     events = []
     pending = None       # a heading that may wrap onto the next line
+    pending_h3 = None    # a lettered sub-heading that may wrap onto the next line
     seen_head = False
     discard = False      # inside a disclaimer box
     last_para = None
@@ -429,13 +430,27 @@ def parse_events(body_lines):
     margin = min(xs) if xs else 60.0
 
     def flush():
-        nonlocal pending
+        nonlocal pending, pending_h3
         if pending:
             events.append(pending)
             pending = None
+        if pending_h3:
+            events.append(("h3", pending_h3[0]))
+            pending_h3 = None
 
     for line in body_lines:
         text, plain = line.text, line.plain()
+
+        # Lettered sub-headings are sometimes wrapped with their continuation
+        # set further to the right.  Keep the first line pending so the
+        # continuation does not become an orphaned body paragraph.
+        if pending_h3:
+            heading, heading_x = pending_h3
+            if line.bold_frac > 0.6 and line.x0 > heading_x + 5:
+                events.append(("h3", norm_text(heading + " " + plain)))
+                pending_h3 = None
+                continue
+            flush()
 
         if line.bold_frac > 0.6 and not PARA.match(plain):
             m = HEAD_ROMAN.match(plain) or HEAD_DEC1.match(plain) or \
@@ -448,7 +463,7 @@ def parse_events(body_lines):
             m = HEAD_LETTER.match(plain)
             if m and seen_head:
                 flush()
-                events.append(("h3", plain))
+                pending_h3 = (plain, line.x0)
                 discard = False
                 continue
             if pending:                              # wrapped heading line

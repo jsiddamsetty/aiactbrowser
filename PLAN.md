@@ -3,6 +3,11 @@
 This is a working plan for a future session. It assumes no memory of prior
 conversations — everything needed is written down here or in the repo.
 
+`INTERPLAY.md` designs the big-picture views built on top of these phases —
+an instrument map and a requirement matrix — and the topic tags and
+legal-effect relations behind them. Its build order interleaves with
+Phases 1, 4 and 5.
+
 ## Where the codebase stands
 
 The portal is a static site (vanilla JS, no build step for the frontend):

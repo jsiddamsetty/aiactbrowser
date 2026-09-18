@@ -3,3 +3,7 @@
 node_modules/
 __pycache__/
 *.pyc
+
+# Local working documents, unrelated to the browser corpus.
+IMPP - DFKI Deutsch formatiert.docx
+IMPP - DFKI mit Ihren Änderungen und Ergänzungen.docx

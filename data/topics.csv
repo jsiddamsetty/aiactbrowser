@@ -1,0 +1,74 @@
+topic,instrument,provision,role,applies_to,effect,reason
+scope,aia,aia:art_2,,,requires,Defines the Regulation's scope.
+scope,aia,aia:art_5,,all AI systems,requires,Lists prohibited AI practices.
+scope,aia,aia:art_6,,high-risk AI systems,requires,Classifies high-risk AI systems.
+governance,aia,aia:art_17,provider,high-risk AI systems,requires,Requires a provider quality-management system.
+risk-management,aia,aia:art_9,provider,high-risk AI systems,requires,Requires a continuous risk-management system.
+models,aia,aia:art_11,provider,high-risk AI systems,requires,Requires technical documentation.
+data,aia,aia:art_10,provider,high-risk AI systems,requires,Sets data and data-governance requirements.
+testing,aia,aia:art_15,provider,high-risk AI systems,requires,"Requires accuracy, robustness and cybersecurity testing."
+cybersecurity,aia,aia:art_15,provider,high-risk AI systems,requires,"Requires resilience against errors, faults and attacks."
+logging,aia,aia:art_12,provider,high-risk AI systems,requires,Requires automatic event logging.
+monitoring,aia,aia:art_72,provider,high-risk AI systems,requires,Requires post-market monitoring.
+human-oversight,aia,aia:art_14,provider,high-risk AI systems,requires,Requires effective human oversight.
+transparency,aia,aia:art_50,,,requires,Sets transparency duties for certain AI systems.
+incidents,aia,aia:art_73,provider,high-risk AI systems,requires,Requires serious-incident reporting.
+third-parties,aia,aia:art_25,,,requires,Allocates responsibilities along the AI value chain.
+competence,aia,aia:art_4,,,requires,Requires sufficient AI literacy.
+supervision,aia,aia:art_74,,,requires,Allocates market-surveillance authority.
+governance,gdpr,gdpr:art_24,controller,personal data processing,requires,Makes controllers responsible for demonstrable compliance.
+risk-management,gdpr,gdpr:art_35,controller,personal data processing,requires,Requires data-protection impact assessment for high-risk processing.
+models,gdpr,gdpr:art_25,controller,personal data processing,requires,Requires data protection by design and default.
+data,gdpr,gdpr:art_5,controller,personal data processing,requires,Sets principles for personal-data processing.
+cybersecurity,gdpr,gdpr:art_32,,personal data processing,requires,Requires security appropriate to processing risk.
+logging,gdpr,gdpr:art_30,,personal data processing,requires,Requires records of processing activities.
+human-oversight,gdpr,gdpr:art_22,controller,personal data processing,requires,Restricts solely automated decisions with significant effects.
+transparency,gdpr,gdpr:art_13,controller,personal data processing,requires,Requires information when data are collected.
+incidents,gdpr,gdpr:art_33,controller,personal data processing,requires,Requires personal-data-breach notification.
+third-parties,gdpr,gdpr:art_28,controller,personal data processing,requires,Sets processor contracting and oversight duties.
+competence,gdpr,gdpr:art_39,,personal data processing,requires,Defines data-protection officer tasks.
+supervision,gdpr,gdpr:art_83,,,requires,Sets administrative fines.
+governance,dora,dora:art_5,financial entity,,requires,Places ICT-risk governance with the management body.
+risk-management,dora,dora:art_6,financial entity,,requires,Requires a sound ICT risk-management framework.
+risk-management,dora,dora:art_8,financial entity,,requires,Requires identification of ICT-supported functions and assets.
+cybersecurity,dora,dora:art_9,financial entity,,requires,Requires ICT protection and prevention measures.
+monitoring,dora,dora:art_10,financial entity,,requires,Requires detection of anomalous activities and incidents.
+incidents,dora,dora:art_17,financial entity,,requires,Requires an ICT-incident management process.
+testing,dora,dora:art_24,financial entity,,requires,Sets general digital operational resilience testing requirements.
+third-parties,dora,dora:art_28,financial entity,,requires,Requires management of ICT third-party risk.
+continuity,dora,dora:art_11,financial entity,,requires,Requires ICT business-continuity policy and response plans.
+competence,dora,dora:art_13,financial entity,,requires,Requires learning and evolving from incidents and tests.
+models,dora-rts-rmf,dora-rts-rmf:art_15,financial entity,,requires,Specifies change-management controls for ICT systems.
+data,dora-rts-rmf,dora-rts-rmf:art_5,financial entity,,requires,Specifies encryption and cryptographic controls.
+testing,dora-rts-rmf,dora-rts-rmf:art_16,financial entity,,requires,"Specifies ICT project acquisition, development and maintenance controls."
+logging,dora-rts-rmf,dora-rts-rmf:art_12,financial entity,,requires,"Specifies logging procedures, systems and retention periods."
+models,marisk,marisk:module_AT-4.3.4,institution,,requires,"Applies governance requirements to models, technology-based innovation and AI."
+human-oversight,marisk,marisk:module_AT-4.3.4,institution,,requires,Requires appropriate explainability of model results.
+cybersecurity,marisk,marisk:module_AT-7.2,institution,,requires,Addresses technically and organisationally adequate resources.
+logging,marisk,marisk:module_AT-6,institution,,requires,Sets documentation and retention expectations.
+third-parties,marisk,marisk:module_AT-9,institution,,requires,Governs outsourcing and excludes DORA-covered ICT services.
+continuity,marisk,marisk:module_AT-7.3,institution,,requires,Sets emergency-management requirements.
+competence,marisk,marisk:module_AT-7.1,institution,,requires,Sets staffing qualification requirements.
+supervision,kimig,kimig:par_2,,,requires,Names German market-surveillance authorities.
+supervision,kimig,kimig:par_15,,,requires,Creates administrative offences and fines.
+scope,kimig,kimig:par_1,,,requires,Defines the German implementing law's scope.
+testing,kimig,kimig:par_14,,,requires,Supports testing through real-world regulatory-sandbox arrangements.
+incidents,kimig,kimig:par_7,,,requires,Governs cooperation and information exchange.
+scope,bafin-ai,bafin-ai:gdl_I.1,,,guidance only,Explains the AI-system concept used by the guidance.
+governance,bafin-ai,bafin-ai:gdl_II.2,financial entity,,guidance only,Explains governance and organisational expectations for AI.
+risk-management,bafin-ai,bafin-ai:gdl_II.3,financial entity,,guidance only,Applies DORA's ICT risk-management framework to AI.
+models,bafin-ai,bafin-ai:gdl_III.1,financial entity,,guidance only,Explains secure software-development expectations for AI.
+testing,bafin-ai,bafin-ai:gdl_III.2,financial entity,,guidance only,Explains risk-based testing of AI systems.
+cybersecurity,bafin-ai,bafin-ai:gdl_V.1,financial entity,,guidance only,Explains adversarial AI threats and cybersecurity measures.
+logging,bafin-ai,bafin-ai:gdl_IV.1,financial entity,,guidance only,"Explains logging, operation, monitoring and deinstallation controls."
+monitoring,bafin-ai,bafin-ai:gdl_IV.1,financial entity,,guidance only,Explains operational monitoring for AI systems.
+human-oversight,bafin-ai,bafin-ai:gdl_Annex,financial entity,,guidance only,Illustrates human review in an LLM assistant case study.
+data,bafin-ai,bafin-ai:gdl_V.2,financial entity,,guidance only,Explains AI data-security expectations.
+incidents,bafin-ai,bafin-ai:gdl_V.3,financial entity,,guidance only,Explains when AI events may be reportable ICT incidents.
+third-parties,bafin-ai,bafin-ai:gdl_IV.2,financial entity,,guidance only,Explains cloud and third-party considerations for AI operations.
+continuity,bafin-ai,bafin-ai:gdl_IV.1,financial entity,,guidance only,Covers operation and controlled deinstallation of AI systems.
+competence,bafin-ai,bafin-ai:gdl_II.2,financial entity,,guidance only,Calls for suitable knowledge and responsibilities for AI.
+scope,commission-guidance,aia:gdl_pp-2.3,,,guidance only,Commission guidance explains placing on the market and putting into service.
+scope,commission-guidance,aia:gdl_hr-1,,high-risk AI systems,guidance only,Draft Commission guidance explains high-risk classification.
+risk-management,commission-guidance,aia:gdl_hr-2.7,,,guidance only,Draft guidance explains the Article 6 classification assessment.
+human-oversight,commission-guidance,aia:gdl_pp-10.1.1,,,guidance only,Commission guidance discusses fundamental-rights assessment safeguards.

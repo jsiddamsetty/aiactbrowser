@@ -519,12 +519,25 @@ DEFLECT_RE = re.compile(
 
 # The acts in the corpus, by the number EUR-Lex texts cite them by and the
 # abbreviation the guidelines use. A reference naming one is routed to it.
-CORPUS_CELEX = {"2024/1689": "aia", "2016/679": "gdpr"}
-CORPUS_ABBR = {"GDPR": "gdpr", "AI Act": "aia"}
+CORPUS_CELEX = {
+    "2024/1689": "aia", "2016/679": "gdpr", "2022/2554": "dora",
+    "2024/1774": "dora-rts-rmf", "2025/532": "dora-rts-sub",
+    "2024/2956": "dora-its-register",
+}
+CORPUS_ABBR = {
+    "GDPR": "gdpr", "AI Act": "aia", "DORA": "dora",
+    "RTS": "dora-rts-rmf", "RMF": "dora-rts-rmf",
+    "ITS": "dora-its-register",
+}
 SELF = "self"
 
 # Each act's article ids, and its highest article number.
-ARTICLE_IDS = {"aia": ("art_", 113), "gdpr": ("gdpr_", 99)}
+ARTICLE_IDS = {
+    "aia": ("art_", 119), "gdpr": ("gdpr_", 99),
+    "dora": ("dora_", 64), "dora-rts-rmf": ("rtsrmf_", 41),
+    "dora-rts-sub": ("rtssub_", 8),
+    "dora-its-register": ("itsreg_", 7),
+}
 
 
 def cited_act(tail, amending=False):
@@ -578,10 +591,11 @@ def article_refs(text, self_id=None, amending=False, doc="aia", to="aia"):
     return found
 
 
-def annex_refs(text, amending=False):
+def annex_refs(text, amending=False, doc="aia", to="aia", prefix="anx_"):
     found = []
     for m in ANX_RE.finditer(text):
-        if deflected(text[m.end():], amending):
+        act = cited_act(text[m.end():], amending)
+        if (doc if act == SELF else act) != to:
             continue
         romans = [m.group(1)]
         for tm in re.finditer(r"(?:,|and|to|or)\s*(%s)\b" % ROMAN_NE, m.group(2) or ""):
@@ -589,7 +603,7 @@ def annex_refs(text, amending=False):
                 romans.append(tm.group(1))
         for r in romans:
             if r in ROMAN:
-                found.append("anx_%s" % r)
+                found.append("%s%s" % (prefix, r))
     return found
 
 
@@ -679,7 +693,8 @@ def derive_recital_links(recitals, articles, annexes):
     return out
 
 
-def build_edges(nodes_by_id, articles, recitals, annexes, definitions):
+def build_edges(nodes_by_id, articles, recitals, annexes, definitions,
+                doc="aia", article_prefix=None, annex_prefix="anx_"):
     """Directed edges. Every edge records where it came from so the UI can
     explain and filter it."""
     edges = []
@@ -702,16 +717,18 @@ def build_edges(nodes_by_id, articles, recitals, annexes, definitions):
         txt = node["text"]
         src = node["id"]
         amending = bool(node.get("amending"))
-        for tgt in article_refs(txt, self_id=src, amending=amending):
+        for tgt in article_refs(txt, self_id=src, amending=amending, doc=doc, to=doc):
             add(src, tgt, "cites")
-        for tgt in annex_refs(txt, amending=amending):
+        for tgt in annex_refs(txt, amending=amending, doc=doc, to=doc,
+                              prefix=annex_prefix):
             add(src, tgt, "annex")
 
     # --- recital -> provision --------------------------------------------
     # Explicit naming first, then derived topical matches for the majority of
     # recitals that never name the article they explain.
     for r in recitals:
-        for tgt in article_refs(r["text"], amending=bool(r.get("amending"))):
+        for tgt in article_refs(r["text"], amending=bool(r.get("amending")),
+                                doc=doc, to=doc):
             add(r["id"], tgt, "explains")
     for src, tgt, score in derive_recital_links(recitals, articles, annexes):
         if (src, tgt, "explains") in seen:

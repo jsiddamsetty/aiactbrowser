@@ -1,8 +1,10 @@
 # AI Act Browser
 
-A single-page reader for **Regulation (EU) 2024/1689** (the EU AI Act) that puts
-the article text, its recitals, its cross-references and a full-size citation
-graph on one screen.
+A single-page regulatory portal for the **EU AI Act**, **GDPR**, **DORA** and
+its principal technical standards, Germany's **KI-MIG**, **MaRisk**, and BaFin
+AI/ICT guidance. It keeps provision text, recitals, cross-references and a
+full-size citation graph on one screen, and adds an instrument map and a
+cross-framework requirement matrix.
 
 It shows the Act **as consolidated and in force from 27 July 2026**, after
 Regulation (EU) 2026/1744 (the *Digital Omnibus on AI*), and carries a
@@ -19,7 +21,13 @@ It combines what the two obvious references each do well:
   they explain**, and a graph you can actually work in (full-screen, filterable,
   zoomable, clickable).
 
-No framework, no runtime dependencies. Three static files and one JSON.
+No framework and no frontend runtime dependencies. Corpus JSON files are
+loaded lazily: the AI Act opens first, and another instrument is fetched only
+when its route is opened.
+
+The home page identifies the date the corpus was last checked. It is written
+by the build into `data/registry.json`, so it reflects the build date rather
+than a claim that the source texts update live.
 
 ## What's in the box
 
@@ -28,7 +36,17 @@ index.html                    markup
 assets/styles.css             tokens + layout
 assets/app.js                 routing, reader, search, connections, changes
 assets/graph.js               force-directed canvas graph (no library)
-data/aiact.json               the Act as it now stands — loaded on start
+data/aia.json                 the Act and Commission guidance — loaded on start
+data/gdpr.json                GDPR articles and 173 recitals — lazy
+data/dora.json                DORA articles, recitals and definitions — lazy
+data/dora-*.json              DORA RTS/ITS instruments — lazy
+data/kimig.json               German implementing law — lazy
+data/marisk.json              MaRisk 06/2026 modules — lazy
+data/bafin-ai.json            BaFin AI/ICT guidance — lazy
+data/registry.json            instrument metadata and data-file registry
+data/xrefs.json               cross-corpus edges and lightweight endpoints
+data/topics.json / topics.csv curated requirement matrix and export
+data/relations.json           grounded legal-effect relationships
 data/changes.json             the 2026 redlines — fetched only on /changes
 data/bafin/figure-*.png       the BaFin guidance's two figures, written by the build
 build/build.py                the entry point: sources -> both JSON files
@@ -38,6 +56,10 @@ build/parse_guidelines.py     reader for the Commission guidelines (PDF)
 build/parse_kimig.py          reader for the KI-MIG (gesetze-im-internet XML)
 build/parse_gdpr.py           reader for the GDPR (consolidated markup)
 build/parse_bafin.py          reader for BaFin's guidance on ICT risks in AI (PDF)
+build/parse_eu.py             reusable DORA and RTS/ITS Official Journal reader
+build/parse_marisk.py         MaRisk PDF module reader
+build/model.py                namespacing and cross-instrument reference router
+build/editorial.py            topic tags and grounded legal-effect relations
 build/source-oj.html          Regulation (EU) 2024/1689 as first published
 build/source-consolidated.html  the same Act, consolidated to 27.07.2026
 build/source-omnibus.html     Regulation (EU) 2026/1744, the amending act
@@ -48,6 +70,8 @@ build/source-kimig.xml        KI-MIG, BGBl. 2026 I Nr. 223 (German law)
 build/translations/kimig-en/  its unofficial English translation, per section
 build/source-gdpr.html        Regulation (EU) 2016/679, consolidated 04.05.2016
 build/source-bafin-ai.pdf     BaFin, Guidance on ICT Risks in the Use of AI (2026)
+build/source-dora*.html       DORA and selected RTS/ITS official texts
+build/source-gdpr-oj.html     authentic GDPR preamble and recitals
 ```
 
 ## Data
@@ -86,8 +110,8 @@ numbers, untitled articles), so a broken parse fails loudly rather than shipping
 a half-empty site.
 
 It then lists every connection the build added or dropped since the last
-commit. The sources never change, but the parsers do, and `data/aiact.json` is
-a single line — git would show a parser tweak that drops 250 edges as one
+commit. The sources never change, but the parsers do, and corpus JSON is
+minified — git would show a parser tweak that drops 250 edges as one
 changed line. Read that list before committing a parser change:
 
 ```
@@ -163,7 +187,7 @@ The **Gesetz zur Marktüberwachung und Innovationsförderung von künstlicher
 Intelligenz** (KI-MIG, BGBl. 2026 I Nr. 223, in force 29 July 2026) is the
 German law that gives the Act effect nationally: it names the
 Bundesnetzagentur as market surveillance authority, sets up the KI-Reallabor
-(sandbox), and adds fines. Its 20 sections (`#/kimig/15`) are read from the
+(sandbox), and adds fines. Its 20 sections (`#/kimig/section/15`) are read from the
 gesetze-im-internet.de XML export and shown **in English by default, with an
 English | Deutsch toggle to the original German** on every section, with its
 own document in the contents rail, a *National implementation* card on the home
@@ -235,7 +259,7 @@ section says so, and names the cited provisions that have changed since
 act the AI Act leans on most. The Act defines *personal data*, *profiling* and
 *special categories of personal data* by pointing at GDPR Articles 4 and 9, and
 lets deployers reuse their GDPR impact assessment (Articles 26 and 27). The
-GDPR's 99 articles (`#/gdpr/35`) are read from the EUR-Lex consolidated
+GDPR's 99 articles (`#/gdpr/article/35`) are read from the EUR-Lex consolidated
 export. It uses the same `clg` markup as the Act, so `parse_consolidated.py`
 reads it. The GDPR gets:
 
@@ -257,7 +281,7 @@ it. `cited_act()` in `build/parse.py` now says *which* act a reference names,
 and a reference naming the GDPR lands on the GDPR:
 
 - "Article 4, point (4), of Regulation (EU) 2016/679" → the profiling
-  definition, point (4) of GDPR Article 4 (`#/gdpr/4/pt4`);
+  definition, point (4) of GDPR Article 4 (`#/gdpr/article/4/pt4`);
 - "Article 35 GDPR", the guidelines' shorthand → GDPR Article 35, and
   "Article 9(1) GDPR" → its paragraph 1. "Article 4(4) GDPR" → point (4),
   since Article 4 numbers points, not paragraphs;

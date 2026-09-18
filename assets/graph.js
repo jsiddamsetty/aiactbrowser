@@ -249,7 +249,9 @@
       definition: css.getPropertyValue("--c-definition").trim(),
       guidance: css.getPropertyValue("--c-guidance").trim(),
       kimig: css.getPropertyValue("--c-kimig").trim(),
-      gdpr: css.getPropertyValue("--c-gdpr").trim()
+      gdpr: css.getPropertyValue("--c-gdpr").trim(),
+      module: css.getPropertyValue("--c-module").trim(),
+      external: css.getPropertyValue("--c-external").trim()
     };
     var inkMuted = css.getPropertyValue("--ink-3").trim();
     var ink = css.getPropertyValue("--ink").trim();

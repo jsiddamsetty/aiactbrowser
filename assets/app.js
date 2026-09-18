@@ -12,20 +12,24 @@
   var TERM_RE = null;    // defined terms, longest first
   var TERM_BY_KEY = {};
   var SEARCH = [];
+  var REGISTRY = { corpora: [] }, XREFS = { nodes: [], edges: [], relations: [] };
+  var TOPICS = { topics: [], tags: [] }, RELATIONS = { registry: [], relations: [] };
+  var CORPUS_DOCS = {}, LOADS = {};
 
-  var TYPES = ["article", "recital", "annex", "definition", "guidance", "kimig", "gdpr"];
-  var ALL_TYPES = { article: true, recital: true, annex: true, definition: true, guidance: true, kimig: true, gdpr: true };
-  var TYPE_LABEL = { article: "Articles", recital: "Recitals", annex: "Annexes", definition: "Terms", guidance: "Guidance", kimig: "KI-MIG", gdpr: "GDPR" };
+  var TYPES = ["article", "recital", "annex", "definition", "guidance", "kimig", "gdpr", "module", "external"];
+  var ALL_TYPES = { article: true, recital: true, annex: true, definition: true, guidance: true, kimig: true, gdpr: true, module: true, external: true };
+  var TYPE_LABEL = { article: "Articles", recital: "Recitals", annex: "Annexes", definition: "Terms", guidance: "Guidance", kimig: "KI-MIG", gdpr: "GDPR", module: "MaRisk", external: "External" };
   var KIND_LABEL = {
     cites: "cites", annex: "annex", uses: "defined term",
-    explains: "cites", relates: "topical", interprets: "interprets", concords: "related"
+    explains: "cites", relates: "topical", interprets: "interprets", concords: "related", xcites: "cross-citation"
   };
 
   var state = {
     route: null,
     depth: 1,
-    show: { article: true, recital: true, annex: true, definition: true, guidance: true, kimig: true, gdpr: true },
-    ovShow: { article: true, recital: true, annex: true, definition: true, guidance: true, kimig: true, gdpr: true },
+    show: Object.assign({}, ALL_TYPES),
+    ovShow: Object.assign({}, ALL_TYPES),
+    edgeShow: { cited: true, cross: true, editorial: true, derived: true },
     ovFocus: null,          // provision the expanded graph is centred on
     ovScope: "all",         // "focus" | "all"
     ovDepth: 1
@@ -63,22 +67,31 @@
     initTheme();
     wireChrome();
 
-    fetch("/data/aiact.json")
-      .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
+    Promise.all([json("/data/aia.json"), json("/data/registry.json"),
+                 json("/data/xrefs.json"), json("/data/topics.json"), json("/data/relations.json")])
+      .then(function (parts) {
+        REGISTRY = parts[1]; XREFS = parts[2]; TOPICS = parts[3]; RELATIONS = parts[4];
+        CORPUS_DOCS.aia = parts[0];
+        start(parts[0]);
       })
-      .then(start)
       .catch(function (err) {
         el.doc.innerHTML =
           '<div class="boot"><p><strong>The Act could not be loaded.</strong></p>' +
           '<p>' + esc(String(err.message || err)) + '</p>' +
-          '<p>Run <code>python3 build/build.py</code> to regenerate <code>data/aiact.json</code>.</p></div>';
+          '<p>Run <code>python3 build/build.py</code> to regenerate the corpus data.</p></div>';
       });
   });
 
+  function json(url) {
+    return fetch(url).then(function (r) { if (!r.ok) throw new Error(url + ": HTTP " + r.status); return r.json(); });
+  }
+
   function start(data) {
     DATA = data;
+    ["articles", "recitals", "annexes", "definitions", "guidance", "guidanceDocs",
+     "kimig", "kimigParts", "gdpr", "gdprChapters"].forEach(function (key) {
+      if (!DATA[key]) DATA[key] = [];
+    });
     index();
     buildToc();
     buildLegend();
@@ -102,15 +115,27 @@
       if (!el.overlay.hidden) full.resize();
     }, 160));
 
-    window.addEventListener("hashchange", render);
-    render();
+    window.addEventListener("hashchange", renderAsync);
+    renderAsync();
   }
 
   function index() {
-    var all = DATA.articles.concat(DATA.recitals, DATA.annexes, DATA.definitions,
-      DATA.guidance || [], DATA.kimig || [], DATA.gdpr || []);
+    N = {}; OUT = {}; IN = {}; SEARCH = [];
+    var all = [], loadedIds = {};
+    Object.keys(CORPUS_DOCS).forEach(function (slug) {
+      var doc = CORPUS_DOCS[slug];
+      ["articles", "recitals", "annexes", "definitions", "guidance", "kimig", "gdpr", "modules"].forEach(function (key) {
+        (doc[key] || []).forEach(function (node) { all.push(node); loadedIds[node.id] = 1; });
+      });
+    });
+    (XREFS.nodes || []).forEach(function (node) { if (!loadedIds[node.id]) all.push(node); });
     all.forEach(function (n) { N[n.id] = n; OUT[n.id] = []; IN[n.id] = []; });
 
+    DATA.edges = [];
+    Object.keys(CORPUS_DOCS).forEach(function (slug) {
+      DATA.edges = DATA.edges.concat(CORPUS_DOCS[slug].edges || []);
+    });
+    DATA.edges = DATA.edges.concat(XREFS.edges || []);
     DATA.edges.forEach(function (e) {
       if (!N[e.s] || !N[e.t]) return;
       OUT[e.s].push(e);
@@ -135,46 +160,114 @@
         id: n.id, type: n.type, label: n.label, title: n.title || "",
         hay: (n.label + " " + (n.title || "") + " " + (n.titleDe || "") + " " +
           n.text + " " + (n.textDe || "")).toLowerCase(),
-        text: n.textDe ? n.text + " · " + n.textDe : n.text
+        // Cross-corpus endpoints are deliberately lightweight and may not
+        // carry a full text field. Their label remains a useful result and
+        // must never make snippet rendering fail.
+        text: n.textDe ? n.text + " · " + n.textDe : (n.text || n.title || n.label || "")
       };
+    });
+  }
+
+  function mergeCorpus(slug, doc) {
+    CORPUS_DOCS[slug] = doc;
+    if (slug === "gdpr") {
+      DATA.gdpr = doc.gdpr || []; DATA.gdprMeta = doc.meta || {}; DATA.gdprChapters = doc.gdprChapters || [];
+    } else if (slug === "kimig") {
+      DATA.kimig = doc.kimig || []; DATA.kimigMeta = doc.meta || {}; DATA.kimigParts = doc.kimigParts || [];
+    } else if (slug === "bafin-ai") {
+      DATA.guidance = (DATA.guidance || []).concat(doc.guidance || []);
+      DATA.guidanceDocs = (DATA.guidanceDocs || []).concat(doc.guidanceDocs || []);
+    }
+    index();
+    syncRailHead(); paintToc();
+  }
+
+  function loadCorpus(slug) {
+    if (!slug || slug === "aia" || CORPUS_DOCS[slug]) return Promise.resolve();
+    if (LOADS[slug]) return LOADS[slug];
+    var entry = (REGISTRY.corpora || []).filter(function (x) { return x.slug === slug && x.dataFile; })[0];
+    if (!entry) return Promise.resolve();
+    LOADS[slug] = json(entry.dataFile).then(function (doc) { mergeCorpus(slug, doc); });
+    return LOADS[slug];
+  }
+
+  function routeCorpus() {
+    var bits = (location.hash || "#/aia").replace(/^#\/?/, "").split("/");
+    if (bits[0] === "map") return null;
+    if (bits[0] === "changes" || bits[0] === "graph" || !bits[0]) return "aia";
+    if ({ article: 1, recital: 1, annex: 1, term: 1, guidance: 1, kimig: 1, gdpr: 1 }[bits[0]]) return bits[0] === "gdpr" ? "gdpr" : bits[0] === "kimig" ? "kimig" : "aia";
+    return bits[0];
+  }
+
+  function renderAsync() {
+    var slug = routeCorpus();
+    loadCorpus(slug).then(render).catch(function (err) {
+      el.doc.innerHTML = '<div class="boot"><p><strong>The document could not be loaded.</strong></p><p>' + esc(err.message) + '</p></div>';
     });
   }
 
   /* ── routing ──────────────────────────────────────────────── */
 
-  var ROUTE_TO_ID = { article: "art_", recital: "rct_", annex: "anx_", term: "def_", guidance: "gdl_", kimig: "kimig_", gdpr: "gdpr_" };
-  var ID_TO_ROUTE = { art_: "article", rct_: "recital", anx_: "annex", def_: "term", gdl_: "guidance", kimig_: "kimig", gdpr_: "gdpr" };
+  var ROUTE_TO_ID = { article: "art_", recital: "rct_", annex: "anx_", term: "def_", guidance: "gdl_", section: "par_", module: "module_" };
+  var ID_TO_ROUTE = { art_: "article", rct_: "recital", anx_: "annex", def_: "term", gdl_: "guidance", par_: "section", module_: "module", omr_: "recital" };
 
   function routeOf(id) {
-    var m = /^[a-z]+_/.exec(id);
-    var p = m && ID_TO_ROUTE[m[0]] ? m[0] : id.slice(0, 4);
-    return "#/" + ID_TO_ROUTE[p] + "/" + id.slice(p.length);
+    if (id.indexOf("ext:") === 0) return (N[id] && N[id].externalUrl) || "#/map";
+    var split = id.split(":"), corpus = split.shift(), local = split.join(":");
+    var p = Object.keys(ID_TO_ROUTE).filter(function (prefix) { return local.indexOf(prefix) === 0; })[0];
+    return "#/" + corpus + "/" + (ID_TO_ROUTE[p] || "node") + "/" + encodeURIComponent(local.slice((p || "").length));
   }
 
   function parseHash() {
     var h = (location.hash || "#/").replace(/^#\/?/, "");
-    if (!h) return { kind: "home" };
+    if (!h || h === "aia") return { kind: "home" };
     var bits = h.split("/");
+    if (bits[0] === "guidance") {
+      if (bits[1] && bits[1].indexOf("bafin") === 0) {
+        var bsec = bits[1].replace(/^bafin-?/, "");
+        location.replace(bsec ? "#/bafin-ai/guidance/" + bsec : "#/bafin-ai");
+      } else {
+        location.replace("#/aia/guidance/" + (bits[1] || "pp"));
+      }
+      return { kind: "loading" };
+    }
+    if (bits[0] === "map") return { kind: "map" };
+    if (bits[0] === "matrix" || bits[0] === "topic") {
+      location.replace("#/map");
+      return { kind: "loading" };
+    }
     if (bits[0] === "graph") {
       var gf = bits[1] ? decodeURIComponent(bits[1]) : null;
       return { kind: "graph", focus: gf && N[gf] ? gf : null };
     }
     if (bits[0] === "changes") return { kind: "changes", focus: bits[1] || null };
-    // A document's own home page: #/kimig, #/guidance/pp. Section ids always
-    // carry a number (pp-2.3), so a bare slug never collides with one.
-    if ((bits[0] === "kimig" || bits[0] === "gdpr") && !bits[1] && (DATA[bits[0]] || []).length) {
-      return { kind: "doc", doc: bits[0] };
+    if (bits[0] === "aia" && bits[1] === "guidance" && bits[2] && guidanceDoc(bits[2])) {
+      if (bits[2].indexOf("-") < 0) return { kind: "doc", doc: "gdl-" + bits[2] };
     }
-    if (bits[0] === "guidance" && bits[1] && guidanceDoc(bits[1])) return { kind: "doc", doc: "gdl-" + bits[1] };
-    var pref = ROUTE_TO_ID[bits[0]];
-    if (!pref || !bits[1]) return { kind: "home" };
-    var id = pref + decodeURIComponent(bits[1]);
+    // Permanent redirects for the routes published before namespacing.
+    if ({ article: 1, recital: 1, annex: 1, term: 1 }[bits[0]] && bits[1]) {
+      location.replace("#/aia/" + bits[0] + "/" + bits[1] + (bits[2] ? "/" + bits[2] : ""));
+      return { kind: "loading" };
+    }
+    if ((bits[0] === "gdpr" || bits[0] === "kimig") && bits[1] && !ROUTE_TO_ID[bits[1]]) {
+      location.replace("#/" + bits[0] + "/" + (bits[0] === "gdpr" ? "article" : "section") + "/" + bits[1] + (bits[2] ? "/" + bits[2] : ""));
+      return { kind: "loading" };
+    }
+    var corpus = bits[0];
+    if (!bits[1]) {
+      var entry = registryEntry(corpus);
+      return entry && entry.menu === false ? { kind: "map" } : CORPUS_DOCS[corpus] ? { kind: "doc", doc: corpus } : { kind: "home" };
+    }
+    var pref = ROUTE_TO_ID[bits[1]];
+    if (!pref || !bits[2]) return { kind: "doc", doc: corpus };
+    var id = corpus + ":" + pref + decodeURIComponent(bits[2]);
     if (!N[id]) return { kind: "home" };
-    return { kind: "node", id: id, para: bits[2] || null };
+    return { kind: "node", id: id, para: bits[3] || null };
   }
 
   function docRoute(doc) {
-    return doc === "kimig" || doc === "gdpr" ? "#/" + doc : "#/guidance/" + doc.slice(4);
+    if (doc.indexOf("gdl-") === 0) return "#/aia/guidance/" + doc.slice(4);
+    return "#/" + doc;
   }
 
   /* The hash that reopens a route — where closing the graph overlay returns. */
@@ -185,12 +278,14 @@
   }
 
   function go(hash) {
+    if (/^https?:\/\//.test(hash)) { window.open(hash, "_blank", "noopener"); return; }
     if (location.hash === hash) render();
     else location.hash = hash;
   }
 
   function render() {
     var r = parseHash();
+    if (r.kind === "loading") return;
 
     if (r.kind === "graph") {
       // Opening a focused graph URL cold: render the provision behind the
@@ -212,8 +307,12 @@
 
     state.route = r;
     closeRails();
+    document.body.classList.toggle("portal-wide", r.kind === "map");
 
-    if (r.kind === "changes") {
+    if (r.kind === "map") {
+      renderMap(); renderGraphFor(null); el.conn.innerHTML = ""; markToc(null);
+      document.title = "Interaction map — AI Act Browser";
+    } else if (r.kind === "changes") {
       renderChanges(r.focus);
       renderGraphFor(null);
       el.conn.innerHTML = "";
@@ -253,36 +352,41 @@
   var TAB_FOR = { article: "act", recital: "recitals", annex: "annexes", definition: "defs" };
 
   function docList() {
-    var km = DATA.kimigMeta || {};
-    var list = [{ id: "aia", group: "Regulation", type: "article",
-                  name: "AI Act", sub: "Regulation (EU) 2024/1689" }];
-    if (DATA.gdpr && DATA.gdpr.length) {
-      list.push({ id: "gdpr", group: "Regulation", type: "gdpr",
-                  name: "GDPR", sub: (DATA.gdprMeta || {}).cite });
-    }
-    (DATA.guidanceDocs || []).forEach(function (d) {
-      var bafin = d.authority === "BaFin";
-      list.push({ id: "gdl-" + d.slug, group: bafin ? "Supervisory guidance" : "Commission guidance",
-                  type: "guidance", name: d.name,
-                  sub: bafin ? "BaFin · DORA and AI" : d.draft ? "Draft guidelines" : "Guidelines",
-                  badge: bafin ? "non-binding" : d.draft ? "draft" : "adopted", draft: d.draft });
+    var instruments = (REGISTRY.corpora || []).filter(function (entry) {
+      return entry.kind === "instrument" && entry.status === "in" && entry.dataFile && entry.menu !== false && entry.slug !== "commission-guidance";
+    }).map(function (entry) {
+      return { id: entry.slug, group: entry.layer, type: entry.slug === "gdpr" ? "gdpr" :
+        entry.slug === "kimig" ? "kimig" : entry.slug === "marisk" ? "module" :
+        entry.bindingLevel.indexOf("guidance") >= 0 ? "guidance" : "article",
+        name: entry.shortTitle, sub: entry.citation || entry.bindingLevel,
+        badge: entry.bindingLevel.indexOf("guidance") >= 0 ? "non-binding" : "in force" };
     });
-    if (DATA.kimig && DATA.kimig.length) {
-      list.push({ id: "kimig", group: "National implementation", type: "kimig",
-                  name: km.abbr || "KI-MIG", sub: "German implementing law", badge: "in force" });
-    }
-    return list;
+    var guidance = [];
+    (DATA.guidanceDocs || []).filter(function (d) { return d.authority !== "BaFin"; }).forEach(function (d) {
+      guidance.push({ id: "gdl-" + d.slug, group: "EU guidance", type: "guidance", name: d.name,
+                      sub: d.draft ? "Draft guidelines" : "Guidelines", badge: d.draft ? "draft" : "adopted", draft: d.draft });
+    });
+    var ordered = instruments.concat(guidance);
+    var order = ["aia", "gdl-pp", "gdl-hr", "kimig", "marisk", "bafin-ai", "gdpr", "dora", "dora-rts-rmf"];
+    ordered.forEach(function (entry) { if (entry.id === "kimig") entry.name = "KI-MIG"; });
+    return ordered.sort(function (a, b) {
+      var ai = order.indexOf(a.id), bi = order.indexOf(b.id);
+      return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+    });
   }
 
   function docTitle(doc) {
     if (doc === "kimig") return (DATA.kimigMeta || {}).abbr || "KI-MIG";
     if (doc === "gdpr") return "GDPR";
-    var d = guidanceDoc(doc.slice(4));
-    return d ? d.title : doc;
+    var d = doc.indexOf("gdl-") === 0 && guidanceDoc(doc.slice(4));
+    if (d) return d.title;
+    var entry = registryEntry(doc);
+    return entry ? entry.shortTitle : doc;
   }
 
   function docOf(n) {
-    if (n.type === "guidance") return "gdl-" + n.doc;
+    if (n.type === "guidance" && n.corpus === "aia") return "gdl-" + n.doc;
+    if (n.corpus && n.corpus !== "aia") return n.corpus;
     if (n.type === "kimig") return "kimig";
     if (n.type === "gdpr") return "gdpr";
     return "aia";
@@ -308,6 +412,19 @@
         syncRailHead();
         paintToc();
         markToc(state.route && state.route.id);
+      });
+      b.addEventListener("keydown", function (ev) {
+        var tabs = [].slice.call(el.railTabs.querySelectorAll(".rail-tab"));
+        var at = tabs.indexOf(b), next = null;
+        if (ev.key === "ArrowRight" || ev.key === "ArrowDown") next = (at + 1) % tabs.length;
+        else if (ev.key === "ArrowLeft" || ev.key === "ArrowUp") next = (at - 1 + tabs.length) % tabs.length;
+        else if (ev.key === "Home") next = 0;
+        else if (ev.key === "End") next = tabs.length - 1;
+        if (next !== null) {
+          ev.preventDefault();
+          tabs[next].focus();
+          tabs[next].click();
+        }
       });
     });
 
@@ -349,6 +466,7 @@
       var on = b.dataset.tab === tocTab;
       b.classList.toggle("is-on", on);
       b.setAttribute("aria-selected", on ? "true" : "false");
+      b.tabIndex = on ? 0 : -1;
     });
   }
 
@@ -415,6 +533,8 @@
       h = chapterToc(DATA.chapters, DATA.articles);
     } else if (tocDoc === "gdpr") {
       h = chapterToc(DATA.gdprChapters, DATA.gdpr);
+    } else if (CORPUS_DOCS[tocDoc] && CORPUS_DOCS[tocDoc].articles) {
+      h = chapterToc(CORPUS_DOCS[tocDoc].chapters || [], CORPUS_DOCS[tocDoc].articles || []);
     } else if (tocDoc === "aia" && tocTab === "recitals") {
       DATA.recitals.forEach(function (r) {
         h += tocLink(r.id, String(r.num), lede(r.text, 70));
@@ -459,6 +579,10 @@
         });
         h += "</div></div>";
       });
+    } else if (tocDoc === "marisk") {
+      (CORPUS_DOCS.marisk.modules || []).forEach(function (m) { h += tocLink(m.id, m.key, m.title); });
+    } else if (tocDoc === "bafin-ai") {
+      (CORPUS_DOCS["bafin-ai"].guidance || []).forEach(function (g) { h += tocLink(g.id, "§ " + g.sec, g.title); });
     } else {
       DATA.definitions.forEach(function (d) {
         h += tocLink(d.id, String(d.num), d.term);
@@ -527,13 +651,15 @@
     var m = DATA.meta, c = m.counts;
     var h = '<div class="home-hero">' +
       '<p class="home-eyebrow">' + esc(m.source) + "</p>" +
-      "<h1>The AI Act, with its recitals attached.</h1></div>";
+      "<h1>The AI Act, with its recitals attached.</h1>" + checkedOn() + "</div>";
 
     h += '<a class="banner" href="#/changes">' +
       '<span class="banner-tag">In force ' + esc(m.inForce) + "</span>" +
       "<span class="+'"banner-text"'+">Amended by the " + esc(m.amendedBy.short) + ": <b>" +
       c.changed + " provisions</b> added or rewritten.</span>" +
       '<span class="banner-go">See what changed →</span></a>';
+
+    h += '<div class="portal-actions"><a class="portal-card" href="#/map"><b>Interaction map</b><span>Concrete bridges between requirements across instruments →</span></a></div>';
 
     /* the GDPR, which the Act defines its data terms by */
     if (DATA.gdpr && DATA.gdpr.length) {
@@ -559,8 +685,7 @@
     });
     if (commissionSecs.length) {
       h += '<div class="block"><div class="block-head"><h2>Commission guidance</h2>' +
-        '<span class="block-count">' + commissionSecs.length + "</span>" +
-        '<span class="block-note">attached to the provisions it interprets</span></div>' +
+        '<span class="block-count">' + commissionSecs.length + "</span></div>" +
         '<div class="gcards">';
       commission.forEach(function (d) {
         var secs = DATA.guidance.filter(function (g) { return g.doc === d.slug; });
@@ -680,8 +805,54 @@
 
   function renderDocHome(doc) {
     el.doc.innerHTML = doc === "kimig" ? kimigHome()
-      : doc === "gdpr" ? gdprHome() : guidanceHome(guidanceDoc(doc.slice(4)));
+      : doc === "gdpr" ? gdprHome()
+      : doc.indexOf("gdl-") === 0 ? guidanceHome(guidanceDoc(doc.slice(4)))
+      : genericDocHome(doc);
     wireHome();
+  }
+
+  function registryEntry(slug) {
+    return (REGISTRY.corpora || []).filter(function (entry) { return entry.slug === slug; })[0];
+  }
+
+  function genericDocHome(slug) {
+    if (["marisk", "dora", "dora-rts-rmf"].indexOf(slug) >= 0) return doraAiHome(slug);
+    var doc = CORPUS_DOCS[slug] || {}, meta = doc.meta || {}, entry = registryEntry(slug) || {};
+    var nodes = (doc.articles || doc.guidance || doc.modules || []);
+    var h = '<nav class="crumb"><a href="#/">The portal</a><i>›</i><span>' + esc(entry.shortTitle || meta.shortTitle || slug) + '</span></nav>' +
+      '<span class="kicker" data-type="' + (nodes[0] ? nodes[0].type : "article") + '">' + esc(entry.bindingLevel || "Document") + '</span>' +
+      '<h1 class="doc-title">' + esc(meta.title || entry.title || slug) + '</h1>' +
+      '<p class="doc-num">' + esc(meta.cite || meta.celex || entry.citation || "") + '</p>' +
+      '<ul class="doc-facts"><li><b>' + nodes.length + '</b> provisions</li>' +
+      (meta.inForce ? '<li>In force <b>' + esc(meta.inForce) + '</b></li>' : '') +
+      (meta.sourceUrl ? '<li><a href="' + esc(meta.sourceUrl) + '" target="_blank" rel="noopener">Official source ↗</a></li>' : '') + '</ul>';
+    if (doc.chapters && doc.articles) {
+      var parts = doc.chapters.map(function (c) {
+        var arts = doc.articles.filter(function (a) { return a.chapter === c.roman; });
+        return { n: c.roman || "—", title: c.title, first: arts[0] && arts[0].id, count: arts.length };
+      }).filter(function (p) { return p.count; });
+      h += '<div class="block"><div class="block-head"><h2>Structure</h2><span class="block-count">' + parts.length + '</span></div>' + partGrid(slug, parts, "art") + '</div>';
+    } else {
+      h += '<div class="block"><div class="block-head"><h2>Contents</h2><span class="block-count">' + nodes.length + '</span></div><div class="links">' +
+        nodes.map(function (n) { return linkRow(n, ""); }).join("") + '</div></div>';
+    }
+    return h;
+  }
+
+  function doraAiHome(slug) {
+    var lens = RELATIONS.doraAiLens || {}, entry = registryEntry(slug) || {};
+    var cards = (lens.cards || []).filter(function (card) { return card.corpora.indexOf(slug) >= 0; });
+    var title = slug === "dora" ? (lens.title || "DORA for fintech AI") : (entry.shortTitle || slug) + " for fintech AI";
+    var h = '<nav class="crumb"><a href="#/">The portal</a><i>›</i><span>' + esc(entry.shortTitle || slug) + '</span></nav>' +
+      '<p class="home-eyebrow">Fintech AI lens</p><h1 class="doc-title">' + esc(title) + '</h1>' +
+      '<p class="dora-ai-scope">' + esc(lens.scope || "Curated DORA requirements for AI used by financial entities.") + '</p>' +
+      '<aside class="dora-ai-caveat"><b>How to read this</b><span>' + esc(lens.caveat || "Applicability depends on the entity and its use of the system.") + '</span></aside>' +
+      '<div class="block dora-ai-block"><div class="block-head"><h2>What matters for an AI use case</h2><span class="block-count">' + cards.length + '</span></div>' +
+      '<div class="dora-ai-cards">' + cards.map(function (card) {
+        return '<article><h3>' + esc(card.title) + '</h3><p class="dora-ai-when"><b>When it matters</b>' + esc(card.applies_when) + '</p><p>' + esc(card.why) + '</p><div class="relation-basis"><b>Read the provisions</b>' + card.grounding.map(groundingLink).join("") + '</div></article>';
+      }).join("") + '</div></div>' +
+      '<p class="dora-ai-browse">The document rail still provides the complete ' + esc(entry.shortTitle || "DORA") + ' corpus when you need the wider legal context.</p>';
+    return h;
   }
 
   function guidanceHome(d) {
@@ -820,6 +991,151 @@
     return IN[n.id]
       .filter(function (e) { return N[e.s] && N[e.s].type !== "gdpr"; })
       .sort(function (a, b) { return actOrder(N[a.s], N[b.s]); });
+  }
+
+  /* ── instrument map and requirement matrix ──────────────── */
+
+  function renderMap() {
+    var items = (REGISTRY.corpora || []).slice();
+    var width = 1200, height = 820;
+    var positions = {
+      "aia": { x: 600, y: 330 }, "gdpr": { x: 600, y: 80 },
+      "commission-guidance": { x: 285, y: 140 }, "kimig": { x: 245, y: 330 },
+      "authority:bafin": { x: 540, y: 455 }, "authority:bnetza": { x: 95, y: 565 },
+      "marisk": { x: 790, y: 500 }, "dora": { x: 600, y: 630 },
+      "bafin-ai": { x: 170, y: 735 }, "dora-rts-rmf": { x: 740, y: 760 },
+      "dora-rts-sub": { x: 940, y: 700 }, "dora-its-register": { x: 1080, y: 535 }
+    };
+    var networkNames = {
+      "aia": ["EU AI Act"], "commission-guidance": ["Commission", "guidelines"],
+      "kimig": ["KI-MIG"], "gdpr": ["GDPR"], "dora": ["DORA"], "marisk": ["MaRisk"], "authority:bafin": ["BaFin"],
+      "authority:bnetza": ["Bundesnetzagentur"],
+      "bafin-ai": ["ICT risks in AI"], "dora-rts-rmf": ["RTS RMF"],
+      "dora-rts-sub": ["RTS Subcontracting"], "dora-its-register": ["ITS Register"]
+    };
+    function edgePoint(from, to) {
+      var dx = to.x - from.x, dy = to.y - from.y;
+      var tx = dx ? 88 / Math.abs(dx) : Infinity, ty = dy ? 28 / Math.abs(dy) : Infinity;
+      var t = Math.min(tx, ty);
+      return { x: from.x + dx * t, y: from.y + dy * t };
+    }
+    var relations = RELATIONS.relations || [];
+    var lines = relations.map(function (rel, index) {
+      var a = positions[rel.from], b = positions[rel.to];
+      if (!a || !b) return "";
+      var start = edgePoint(a, b), end = edgePoint(b, a);
+      return '<g class="imap-relation" data-relation="' + index + '" role="button" tabindex="0" aria-label="Show how ' + esc((networkNames[rel.from] || [rel.from]).join(" ")) + ' relates to ' + esc((networkNames[rel.to] || [rel.to]).join(" ")) + '"><line class="imap-edge-hit" x1="' + start.x + '" y1="' + start.y + '" x2="' + end.x + '" y2="' + end.y + '"></line><line class="imap-edge imap-legal" marker-end="url(#imap-arrow)" x1="' + start.x + '" y1="' + start.y + '" x2="' + end.x + '" y2="' + end.y + '"><title>' + esc(rel.explanation) + '</title></line></g>';
+    }).join("");
+    var nodes = items.map(function (item) {
+      var p = positions[item.slug]; if (!p) return "";
+      var cls = item.slug === "aia" ? " is-root" : item.slug === "dora" ? " is-hub" : item.status === "stub" ? " is-stub" : item.kind === "authority" ? " is-authority" : "";
+      var labels = networkNames[item.slug] || [item.shortTitle];
+      var label = labels.map(function (text, i) { return '<tspan x="0" dy="' + (i ? 14 : labels.length > 1 ? -4 : 4) + '">' + esc(text) + '</tspan>'; }).join("");
+      var body = '<rect x="-88" y="-28" width="176" height="56" rx="10"></rect><text text-anchor="middle">' + label + '</text>';
+      if (item.route) {
+        return '<a class="imap-node' + cls + '" href="' + esc(item.route) + '" aria-label="Open ' + esc(item.shortTitle) + ' corpus" transform="translate(' + p.x + ' ' + p.y + ')" tabindex="0">' + body + '</a>';
+      }
+      return '<g class="imap-node is-static' + cls + '" aria-label="' + esc(item.shortTitle) + ' — no corpus available" transform="translate(' + p.x + ' ' + p.y + ')" tabindex="0">' + body + '</g>';
+    }).join("");
+    var kindNames = {
+      interprets: "Explains how to apply", implements: "Implements nationally",
+      "builds-on": "Reuses existing compliance work", designates: "Names the competent authority",
+      "carves-out": "Sets a legal boundary", "deems-fulfilled": "Recognises equivalent compliance",
+      specifies: "Adds detailed requirements", applies: "Applies sector rules to AI",
+      "recognises-ai": "Expressly brings AI into model governance"
+    };
+    el.doc.innerHTML = '<div class="home-hero portal-hero"><p class="home-eyebrow">Interaction map</p><h1>How requirements connect across instruments.</h1><p>The AI Act is the central reference point. Instruments it directly touches sit around it; DORA forms a second hub for its own technical standards and supervisory guidance.</p></div>' +
+      '<div class="block map-network-block"><div class="block-head"><h2>Instrument-level legal relationships</h2><span class="block-note">Hover an arrow for a preview; click to keep the detail open</span></div>' +
+      '<div class="map-key" aria-label="Map key"><span><i class="key-line legal"></i><b>Directed legal relationship</b></span><span><b>Large node</b> — relationship hub</span><span>Select a menu corpus to open it</span><span>Supporting standards stay in the map</span></div>' +
+      '<div class="imap-wrap"><svg class="imap" role="img" aria-label="Interactive network of legal relationships centred on the EU AI Act" viewBox="0 0 ' + width + ' ' + height + '"><defs><marker id="imap-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs>' + lines + nodes + '</svg></div>' +
+      '<section class="map-detail" id="map-detail" aria-live="polite"><p class="map-detail-prompt">Hover an arrow to see the relationship. Click an arrow to keep its legal basis and concrete mechanisms visible.</p></section></div>';
+    wireMapDetails(relations, networkNames, kindNames);
+  }
+
+  function wireMapDetails(relations, names, kindNames) {
+    var detail = el.doc.querySelector("#map-detail"), edges = [].slice.call(el.doc.querySelectorAll(".imap-relation"));
+    var locked = null;
+    function title(slug) { return (names[slug] || [(registryEntry(slug) || {}).shortTitle || slug]).join(" "); }
+    function clear() {
+      if (locked !== null) return;
+      edges.forEach(function (edge) { edge.classList.remove("is-active"); });
+      detail.innerHTML = '<p class="map-detail-prompt">Hover an arrow to see the relationship. Click an arrow to keep its legal basis and concrete mechanisms visible.</p>';
+    }
+    function show(index, shouldLock) {
+      var relation = relations[index]; if (!relation) return;
+      if (shouldLock && locked === index) { locked = null; clear(); return; }
+      if (shouldLock) locked = index;
+      edges.forEach(function (edge) { edge.classList.toggle("is-active", Number(edge.dataset.relation) === index); });
+      var bridges = (RELATIONS.interactions || []).filter(function (bridge) {
+        return bridge.from === relation.from && bridge.to === relation.to;
+      });
+      var mechanismHtml = bridges.length ? '<div class="map-detail-mechanisms"><h4>Concrete mechanisms</h4>' + bridges.map(function (bridge) {
+        return bridge.mechanisms.map(function (mechanism) {
+          return '<article><h5>' + esc(mechanism.name) + '</h5><span>' + esc(mechanism.kind) + '</span><p>' + esc(mechanism.explanation) + '</p><div class="relation-basis"><b>Connected through</b>' + mechanism.grounding.map(groundingLink).join("") + '</div></article>';
+        }).join("");
+      }).join("") + '</div>' : "";
+      detail.innerHTML = '<div class="map-detail-head"><p>' + esc(kindNames[relation.kind] || relation.kind.replace(/-/g, " ")) + '</p><h3>' + esc(title(relation.from)) + ' <span aria-hidden="true">→</span> ' + esc(title(relation.to)) + '</h3></div><p class="map-detail-copy">' + esc(relation.explanation) + '</p><div class="relation-basis"><b>Legal basis</b>' + relation.grounding.map(groundingLink).join("") + '</div>' + mechanismHtml + (locked === index ? '<p class="map-detail-state">Selected — click the highlighted arrow again to clear.</p>' : "");
+    }
+    edges.forEach(function (edge) {
+      var index = Number(edge.dataset.relation);
+      edge.addEventListener("mouseenter", function () { if (locked === null) show(index, false); });
+      edge.addEventListener("mouseleave", clear);
+      edge.addEventListener("focus", function () { if (locked === null) show(index, false); });
+      edge.addEventListener("blur", clear);
+      edge.addEventListener("click", function () { show(index, true); });
+      edge.addEventListener("keydown", function (event) {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); show(index, true); }
+      });
+    });
+  }
+
+  function groundingLink(ref) {
+    var parts = ref.split("/"), id = parts[0], node = N[id];
+    var split = id.split(":"), corpus = split[0], local = split.slice(1).join(":");
+    var entry = registryEntry(corpus) || {}, prefix = entry.shortTitle || corpus.toUpperCase();
+    var fallback = local.indexOf("art_") === 0 ? prefix + " Art. " + local.slice(4)
+      : local.indexOf("par_") === 0 ? prefix + " § " + local.slice(4)
+      : local.indexOf("module_") === 0 ? prefix + " " + local.slice(7)
+      : local.indexOf("anx_") === 0 ? prefix + " Annex " + local.slice(4)
+      : local;
+    var label = node ? shortLabel(node) : fallback;
+    if (node && node.type === "definition") label = "AI Act " + (node.label || node.term || label);
+    else if (node && node.corpus === "aia" && node.type === "article") label = "AI Act " + label;
+    if (parts[1]) {
+      var m = /^(pt|p)(.+)$/.exec(parts[1]);
+      label += m ? (m[1] === "p" ? ", para. " : ", point ") + m[2] : ", " + parts[1];
+    }
+    return '<a href="' + provisionRoute(ref) + '">' + esc(label) + '</a>';
+  }
+
+  function provisionRoute(ref) {
+    var parts = ref.split("/"), id = parts.shift();
+    return routeOf(id) + (parts.length ? "/" + parts.join("/") : "");
+  }
+
+  function renderTopicContext(root, node) {
+    var own = TOPICS.tags.filter(function (tag) { return tag.provision === node.id; });
+    if (!own.length) return;
+    var related = [];
+    own.forEach(function (tag) {
+      TOPICS.tags.forEach(function (other) {
+        if (other.topic === tag.topic && other.provision !== node.id && related.indexOf(other) < 0) related.push(other);
+      });
+    });
+    var names = {};
+    own.forEach(function (tag) { names[tag.topic] = (TOPICS.topics.filter(function (t) { return t.slug === tag.topic; })[0] || {}).name; });
+    root.insertAdjacentHTML("beforeend", '<div class="block"><div class="block-head"><h2>Same topic in other instruments</h2><span class="block-count">' + related.length + '</span></div><div class="topic-badges">' + Object.keys(names).map(function (slug) { return '<span>' + esc(names[slug]) + '</span>'; }).join("") + '</div><div class="links">' + related.map(function (tag) { return '<a class="link" href="' + provisionRoute(tag.provision) + '"><span class="link-id">' + esc(tag.label) + '</span><span class="link-title">' + esc(tag.reason) + '</span></a>'; }).join("") + '</div></div>');
+  }
+
+  function renderLegalEffect(root, node) {
+    var touching = (RELATIONS.relations || []).filter(function (rel) {
+      return rel.grounding.some(function (ref) { return ref.split("/")[0] === node.id; });
+    });
+    if (!touching.length) return;
+    root.insertAdjacentHTML("beforeend", '<div class="block legal-effect"><div class="block-head"><h2>Legal effect</h2><span class="block-count">' + touching.length + '</span></div>' + touching.map(function (rel) {
+      var target = registryEntry(rel.to) || {};
+      return '<article><b>' + esc(rel.kind.replace(/-/g, " ")) + ' · ' + esc(target.shortTitle || rel.to) + '</b><p>' + esc(rel.explanation) + '</p></article>';
+    }).join("") + '</div>');
   }
 
   /* Where in its source a citation sits, as each text numbers it: an
@@ -990,16 +1306,19 @@
 
   function renderNode(n, para) {
     var h = "";
+    var corpus = n.corpus || (n.id.indexOf(":") > 0 ? n.id.split(":", 1)[0] : "aia");
+    var corpusEntry = registryEntry(corpus) || {};
 
     /* breadcrumb */
     if (n.type === "article") {
-      h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i>' +
+      h += '<nav class="crumb"><a href="#/">The portal</a><i>›</i>' +
+        (corpus !== "aia" ? '<a href="#/' + esc(corpus) + '">' + esc(corpusEntry.shortTitle || corpus) + '</a><i>›</i>' : '') +
         "<span>" + esc(n.chapterLabel) + ": " + esc(n.chapterTitle) + "</span>";
       if (n.sectionLabel) h += "<i>›</i><span>" + esc(n.sectionLabel) + ": " + esc(n.sectionTitle) + "</span>";
       h += "</nav>";
     } else if (n.type === "guidance") {
       h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>Guidance</span>' +
-        '<i>›</i><a href="' + docRoute("gdl-" + n.doc) + '">' + esc(n.docName) + "</a>" +
+        '<i>›</i><a href="' + (corpus === "aia" ? docRoute("gdl-" + n.doc) : "#/" + corpus) + '">' + esc(n.docName) + "</a>" +
         "<i>›</i><span>" + esc(n.part) + "</span></nav>";
     } else if (n.type === "kimig") {
       h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i><a href="#/kimig">' +
@@ -1012,6 +1331,8 @@
         "<i>›</i><span>" + esc(n.chapterLabel) + ": " + esc(n.chapterTitle) + "</span>" +
         (n.sectionLabel ? "<i>›</i><span>" + esc(n.sectionLabel) + ": " + esc(n.sectionTitle) + "</span>" : "") +
         "</nav>";
+    } else if (n.type === "module") {
+      h += '<nav class="crumb"><a href="#/">The portal</a><i>›</i><a href="#/marisk">MaRisk</a></nav>';
     } else {
       h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>' +
         esc(TYPE_LABEL[n.type]) + "</span></nav>";
@@ -1069,6 +1390,11 @@
       h += '<h1 class="doc-title">' + esc(n.title) + "</h1>" +
         '<p class="doc-num">Article ' + esc(n.key) + " · " + esc(gm.cite || "") +
         (n.corrected ? " · as corrected, " + esc(gm.corrigendum || "") : "") + "</p>";
+    } else if (n.type === "module") {
+      h += '<h1 class="doc-title">' + esc(n.title) + '</h1><p class="doc-num">MaRisk ' + esc(n.key) + ' · page ' + esc(n.page) + '</p>';
+    } else if (n.type === "external") {
+      h += '<h1 class="doc-title">' + esc(n.label) + '</h1>' +
+        (n.externalUrl ? '<p><a class="btn" href="' + esc(n.externalUrl) + '" target="_blank" rel="noopener">Open official source ↗</a></p>' : '');
     } else {
       h += '<h1 class="doc-title">' + esc(n.title || n.label) + "</h1>";
       if (n.type !== "recital") h += '<p class="doc-num">' + esc(n.label) + "</p>";
@@ -1076,7 +1402,7 @@
 
     /* the text */
     h += '<div class="lawtext" id="lawtext"' + (inGerman(n) ? ' lang="de"' : "") + ">" +
-      (n.type === "kimig" ? kField(n, "html") : n.html) + "</div>";
+      (n.type === "kimig" ? kField(n, "html") : (n.html || "")) + "</div>";
 
     el.doc.innerHTML = h;
 
@@ -1093,7 +1419,7 @@
     if (n.type === "recital") {
       renderRecitalTargets(el.doc, n);
     }
-    /* Commission guidance attached to the provisions it interprets */
+    /* Commission guidance, grouped by document */
     if (n.type === "article" || n.type === "annex" || n.type === "definition") {
       renderGuidanceFor(el.doc, n);
       renderConcordsFor(el.doc, n);
@@ -1109,6 +1435,10 @@
       renderCitedByAct(el.doc, n);
       renderDocNav(el.doc, n, DATA.gdpr, "Art. ");
     }
+    if (n.type === "module") renderDocNav(el.doc, n, (CORPUS_DOCS.marisk || {}).modules || [], "");
+
+    renderTopicContext(el.doc, n);
+    renderLegalEffect(el.doc, n);
 
     if (para) {
       var t = el.doc.querySelector("#" + para);
@@ -1130,6 +1460,8 @@
     }
     if (n.type === "kimig") return "German implementing law";
     if (n.type === "gdpr") return "GDPR · Article " + n.key;
+    if (n.type === "module") return "MaRisk module " + n.key;
+    if (n.type === "external") return "External provision";
     return "Defined term";
   }
 
@@ -1473,7 +1805,7 @@
     el.conn.scrollTop = 0;
   }
 
-  var KIND_ORDER = { interprets: 0, cites: 1, annex: 2, explains: 3, relates: 4, uses: 5, concords: 6 };
+  var KIND_ORDER = { interprets: 0, cites: 1, xcites: 2, annex: 3, explains: 4, relates: 5, uses: 6, concords: 7 };
 
   function edgeSort(a, b) {
     var oa = a.k in KIND_ORDER ? KIND_ORDER[a.k] : 9;
@@ -1500,12 +1832,16 @@
   function artKey(n) { return n.key || String(n.num); }
 
   function shortLabel(n) {
-    if (n.type === "article") return "Art. " + artKey(n);
+    var corpus = n.corpus || (n.id.indexOf(":") > 0 ? n.id.split(":")[0] : "aia");
+    var prefix = corpus === "aia" ? "" : ((registryEntry(corpus) || {}).shortTitle || corpus.toUpperCase()) + " ";
+    if (n.type === "article") return prefix + "Art. " + artKey(n);
     if (n.type === "recital") return (n.amending ? "Omni. " : "Rec. ") + n.num;
     if (n.type === "annex") return "Annex " + n.roman;
     if (n.type === "guidance") return ((guidanceDoc(n.doc) || {}).short || "") + " § " + n.sec;
     if (n.type === "kimig") return "KI-MIG § " + n.key;
     if (n.type === "gdpr") return "GDPR Art. " + n.key;
+    if (n.type === "module") return "MaRisk " + n.key;
+    if (n.type === "external") return n.label;
     return "Term " + n.num;
   }
 
@@ -1578,8 +1914,8 @@
   // is parse.py's DEFLECT_RE and cited_act(), so the links on the page are the
   // edges in the graph: what may follow a reference and hand it to an act.
   var DEFLECT_RE = /^(?:\(\d+\)|\([a-z]+\)|,|first|second|third|fourth|subparagraph|points?|and|or|to|Articles?|\d{1,3}|\s)*(?:(?:of|to)\s+(?:(that)\s+|the\s+[A-Z]{2,8}\s+)?(?:Delegated\s+|Implementing\s+)?(?:Regulation|Directive|Decision|the\s+Charter|the\s+Treaty|Council)|(?:(?:of|under|in)\s+(?:the\s+)?(?:EU\s+)?)?\(?(TFEU|TEU|GDPR|EUDPR|LED|DSA|DMA|UCPD|CCD|ECHR|CER|Charter|DORA|RTS|ITS|RMF|AI\s+Act)\b|(thereof))/;
-  var CORPUS_CELEX = { "2024/1689": "aia", "2016/679": "gdpr" };
-  var CORPUS_ABBR = { "GDPR": "gdpr", "AI Act": "aia" };
+  var CORPUS_CELEX = { "2024/1689": "aia", "2016/679": "gdpr", "2022/2554": "dora", "2024/1774": "dora-rts-rmf", "2025/532": "dora-rts-sub", "2024/2956": "dora-its-register" };
+  var CORPUS_ABBR = { "GDPR": "gdpr", "AI Act": "aia", "DORA": "dora", "RTS": "dora-rts-rmf", "RMF": "dora-rts-rmf", "ITS": "dora-its-register", "DSA": "dsa", "DMA": "dma", "UCPD": "ucpd", "LED": "led", "EUDPR": "eudpr", "TFEU": "tfeu", "TEU": "teu", "Charter": "charter", "ECHR": "echr", "CER": "cer" };
 
   /* "self" when a reference names no act, "aia" or "gdpr" when it names one
      in the corpus, null for any other act. */
@@ -1601,7 +1937,7 @@
     var selfDoc = self && self.type === "guidance" ? self.doc : null;
     // The act a reference naming none belongs to. BaFin's are DORA's, which
     // the corpus does not hold (`act` null), so those stay plain text.
-    var ownAct = !self ? "aia" : self.type === "gdpr" ? "gdpr" : "act" in self ? self.act : "aia";
+    var ownAct = !self ? "aia" : self.corpus || (self.type === "gdpr" ? "gdpr" : "act" in self ? self.act : "aia");
     textNodes(root).forEach(function (t) {
       var s = t.nodeValue;
       REF_RE.lastIndex = 0;
@@ -1615,23 +1951,24 @@
         var act = m[5] ? null : citedAct(tail, self && self.amending);
         if (act === "self") act = ownAct;
         if (m[1] && act === "gdpr") {
-          id = "gdpr_" + parseInt(m[1], 10);
+          id = "gdpr:art_" + parseInt(m[1], 10);
           var pt = POINT_RE.exec(tail);
           var num = m[2] ? parseInt(m[2].slice(1, -1), 10) : pt && pt[1];
           // Article 4 numbers points, not paragraphs: "Article 4(4) GDPR" is
           // its point (4).
-          if (num) para = N[id] && N[id].html.indexOf('id="p' + num + '"') >= 0 ? "p" + num : "pt" + num;
-        } else if (m[1] && act === "aia") {
-          id = "art_" + parseInt(m[1], 10);
+          if (num) para = N[id] && (N[id].html || "").indexOf('id="p' + num + '"') >= 0 ? "p" + num : "pt" + num;
+        } else if (m[1] && act) {
+          id = act + ":art_" + parseInt(m[1], 10);
+          if (!N[id]) id = "ext:" + act + ":art_" + parseInt(m[1], 10);
           if (m[2]) para = "p" + parseInt(m[2].slice(1, -1), 10);
-        } else if (m[3] && act === "aia" && ROMAN_ORD[m[3]]) {
-          id = "anx_" + m[3];
-        } else if (m[4] && act === "aia") {
-          id = "rct_" + parseInt(m[4], 10);
+        } else if (m[3] && act && ROMAN_ORD[m[3]]) {
+          id = act + ":anx_" + m[3];
+        } else if (m[4] && act) {
+          id = act + ":rct_" + parseInt(m[4], 10);
         } else if (m[5] && selfDoc) {
           // Inside the guidelines, "Section 2.7.1" is a section of the same
           // document; elsewhere the word means a Section of the Act itself.
-          id = "gdl_" + selfDoc + "-" + m[5];
+          id = (self.corpus || "aia") + ":gdl_" + selfDoc + "-" + m[5];
         }
         if (!id || !N[id] || id === selfId) continue;
 
@@ -1717,12 +2054,12 @@
 
   function neighbourhood(id, depth, show) {
     var keep = {}, frontier = [id];
-    var inGdpr = N[id].type === "gdpr";
+    var focusCorpus = N[id].corpus || N[id].id.split(":")[0];
     keep[id] = 0;
     for (var d = 1; d <= depth; d++) {
       var next = [];
       frontier.forEach(function (cur) {
-        (OUT[cur] || []).concat(IN[cur] || []).forEach(function (e) {
+        (OUT[cur] || []).concat(IN[cur] || []).filter(edgeVisible).forEach(function (e) {
           var other = e.s === cur ? e.t : e.s;
           if (keep[other] != null || !N[other]) return;
           if (!show[N[other].type]) return;
@@ -1733,7 +2070,7 @@
           // most of the Act and call it a neighbourhood.
           // The GDPR is a statute of its own: the walk does not cross into it
           // from the Act, nor out of it into the Act.
-          if (!LEAF_TYPES[N[other].type] && (N[other].type === "gdpr") === inGdpr) next.push(other);
+          if (!LEAF_TYPES[N[other].type] && (N[other].corpus || N[other].id.split(":")[0]) === focusCorpus) next.push(other);
         });
       });
       frontier = next;
@@ -1747,7 +2084,7 @@
         r: i === id ? Math.max(nodeR(i), 8) : nodeR(i), rank: keep[i]
       };
     });
-    var edges = DATA.edges.filter(function (e) { return set[e.s] && set[e.t]; });
+    var edges = DATA.edges.filter(function (e) { return set[e.s] && set[e.t] && edgeVisible(e); });
     return { nodes: nodes, edges: edges };
   }
 
@@ -1789,16 +2126,18 @@
   var COLLECTION = {
     article: "articles", recital: "recitals",
     annex: "annexes", definition: "definitions", guidance: "guidance",
-    kimig: "kimig", gdpr: "gdpr"
+    kimig: "kimig", gdpr: "gdpr", module: "modules", external: "external"
   };
 
   function docGraph(doc, show) {
+    var corpusDoc = CORPUS_DOCS[doc];
     var own = doc === "kimig" || doc === "gdpr" ? DATA[doc]
-      : DATA.guidance.filter(function (g) { return "gdl-" + g.doc === doc; });
+      : doc.indexOf("gdl-") === 0 ? DATA.guidance.filter(function (g) { return "gdl-" + g.doc === doc; })
+      : corpusDoc ? [].concat(corpusDoc.articles || [], corpusDoc.recitals || [], corpusDoc.annexes || [], corpusDoc.definitions || [], corpusDoc.guidance || [], corpusDoc.modules || []) : [];
     var set = {};
     own.forEach(function (n) {
       if (show[n.type]) set[n.id] = 1;
-      (OUT[n.id] || []).concat(IN[n.id] || []).forEach(function (e) {
+      (OUT[n.id] || []).concat(IN[n.id] || []).filter(edgeVisible).forEach(function (e) {
         var other = e.s === n.id ? e.t : e.s;
         if (N[other] && show[N[other].type]) set[other] = 1;
       });
@@ -1806,7 +2145,7 @@
     var nodes = Object.keys(set).map(function (i) {
       return { id: i, type: N[i].type, label: shortLabel(N[i]), title: N[i].title, r: nodeR(i) };
     });
-    var edges = DATA.edges.filter(function (e) { return set[e.s] && set[e.t]; });
+    var edges = DATA.edges.filter(function (e) { return set[e.s] && set[e.t] && edgeVisible(e); });
     return { nodes: nodes, edges: edges };
   }
 
@@ -1814,14 +2153,22 @@
     var nodes = [], set = {};
     TYPES.forEach(function (t) {
       if (!show[t]) return;
-      DATA[COLLECTION[t]].forEach(function (n) {
+      Object.keys(N).map(function (id) { return N[id]; }).filter(function (n) { return n.type === t; }).forEach(function (n) {
         set[n.id] = 1;
         nodes.push({ id: n.id, type: n.type, label: shortLabel(n), title: n.title, r: nodeR(n.id) });
       });
     });
-    var edges = DATA.edges.filter(function (e) { return set[e.s] && set[e.t]; });
+    var edges = DATA.edges.filter(function (e) { return set[e.s] && set[e.t] && edgeVisible(e); });
     return { nodes: nodes, edges: edges };
   }
+
+  function edgeFamily(edge) {
+    if (edge.k === "xcites") return "cross";
+    if (edge.k === "concords") return "editorial";
+    if (edge.k === "relates") return "derived";
+    return "cited";
+  }
+  function edgeVisible(edge) { return state.edgeShow[edgeFamily(edge)] !== false; }
 
   function buildLegend() {
     el.legend.innerHTML = TYPES.map(function (t) {
@@ -1855,7 +2202,10 @@
       return '<button class="lg' + (state.ovShow[t] ? "" : " is-off") + '" type="button" data-type="' + t + '"' +
         ' data-type-color="' + t + '" aria-pressed="' + (state.ovShow[t] ? "true" : "false") + '">' +
         '<span class="lg-dot"></span><span>' + TYPE_LABEL[t] + "</span></button>";
-    }).join("");
+    }).join("") + '<span class="ov-family-label">Connections</span>' +
+      [{id:"cited",label:"Cited"},{id:"cross",label:"Cross-corpus"},{id:"editorial",label:"Editorial"},{id:"derived",label:"Topical"}].map(function (f) {
+        return '<button class="edge-filter" type="button" data-family="' + f.id + '" aria-pressed="true">' + f.label + '</button>';
+      }).join("");
     el.ovFilters.querySelectorAll(".lg").forEach(function (b) {
       b.setAttribute("data-type", b.dataset.type);
       b.addEventListener("click", function () {
@@ -1864,6 +2214,14 @@
         b.classList.toggle("is-off", !state.ovShow[t]);
         b.setAttribute("aria-pressed", state.ovShow[t] ? "true" : "false");
         paintOverlay();
+      });
+    });
+    el.ovFilters.querySelectorAll("[data-family]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var family = b.dataset.family; state.edgeShow[family] = !state.edgeShow[family];
+        b.classList.toggle("is-off", !state.edgeShow[family]);
+        b.setAttribute("aria-pressed", state.edgeShow[family] ? "true" : "false");
+        paintOverlay(); renderGraphFor(state.route && state.route.id);
       });
     });
   }
@@ -2011,6 +2369,18 @@
 
   var cursor = -1, hits = [];
 
+  function setSearchCursor(next) {
+    cursor = next;
+    var rows = el.results.querySelectorAll(".res");
+    rows.forEach(function (r, i) {
+      var on = i === cursor;
+      r.classList.toggle("is-cursor", on);
+      r.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    el.q.setAttribute("aria-activedescendant", cursor >= 0 && rows[cursor] ? rows[cursor].id : "");
+    if (rows[cursor]) rows[cursor].scrollIntoView({ block: "nearest" });
+  }
+
   function runSearch(raw) {
     var q = raw.trim().toLowerCase();
     if (q.length < 2) { el.results.hidden = true; el.q.setAttribute("aria-expanded", "false"); return; }
@@ -2035,13 +2405,14 @@
     hits.sort(function (a, b) { return b.score - a.score || a.s.id.localeCompare(b.s.id); });
     hits = hits.slice(0, 40);
     cursor = -1;
+    el.q.setAttribute("aria-activedescendant", "");
 
     if (!hits.length) {
       el.results.innerHTML = '<p class="res-empty">Nothing matches “' + esc(raw) + "”.</p>";
     } else {
       el.results.innerHTML = hits.map(function (h, i) {
         var n = N[h.s.id];
-        return '<button class="res" type="button" data-i="' + i + '" data-id="' + n.id + '">' +
+        return '<button class="res" id="result-' + i + '" role="option" aria-selected="false" tabindex="-1" type="button" data-i="' + i + '" data-id="' + n.id + '">' +
           '<div class="res-top"><span class="res-id" data-type="' + n.type + '">' + esc(shortLabel(n)) + "</span>" +
           '<span class="res-title">' + esc(n.type === "definition" ? "‘" + n.term + "’" : (nodeTitle(n, 90) || n.label)) + "</span></div>" +
           '<div class="res-snip">' + snippet(h.s.text, words) + "</div></button>";
@@ -2057,6 +2428,7 @@
   function pick(id) {
     el.results.hidden = true;
     el.q.setAttribute("aria-expanded", "false");
+    el.q.setAttribute("aria-activedescendant", "");
     el.q.blur();
     go(routeOf(id));
   }
@@ -2083,16 +2455,20 @@
     el.q.addEventListener("focus", function () { if (el.q.value.trim().length > 1) runSearch(el.q.value); });
 
     el.q.addEventListener("keydown", function (ev) {
-      if (ev.key === "Escape") { el.results.hidden = true; el.q.blur(); return; }
+      if (ev.key === "Escape") {
+        el.results.hidden = true;
+        el.q.setAttribute("aria-expanded", "false");
+        el.q.setAttribute("aria-activedescendant", "");
+        el.q.blur();
+        return;
+      }
       if (el.results.hidden || !hits.length) return;
       if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
         ev.preventDefault();
         cursor += ev.key === "ArrowDown" ? 1 : -1;
         if (cursor < 0) cursor = hits.length - 1;
         if (cursor >= hits.length) cursor = 0;
-        var rows = el.results.querySelectorAll(".res");
-        rows.forEach(function (r, i) { r.classList.toggle("is-cursor", i === cursor); });
-        if (rows[cursor]) rows[cursor].scrollIntoView({ block: "nearest" });
+        setSearchCursor(cursor);
       } else if (ev.key === "Enter") {
         ev.preventDefault();
         pick(hits[Math.max(cursor, 0)].s.id);
@@ -2103,6 +2479,7 @@
       if (!ev.target.closest(".search")) {
         el.results.hidden = true;
         el.q.setAttribute("aria-expanded", "false");
+        el.q.setAttribute("aria-activedescendant", "");
       }
     });
 
@@ -2222,6 +2599,15 @@
   function lede(t, n) {
     t = String(t || "");
     return t.length <= n ? t : t.slice(0, t.lastIndexOf(" ", n) > 0 ? t.lastIndexOf(" ", n) : n) + "…";
+  }
+
+  function checkedOn() {
+    var value = REGISTRY.generated;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return "";
+    var parts = value.split("-"), months = ["January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"];
+    var label = (+parts[2]) + " " + months[(+parts[1]) - 1] + " " + parts[0];
+    return '<p class="data-checked">Corpus data checked on <time datetime="' + value + '">' + label + "</time>.</p>";
   }
 
   function debounce(fn, ms) {

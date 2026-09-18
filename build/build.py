@@ -25,6 +25,8 @@ only to render the redline for provisions EUR-Lex has already marked.
 """
 
 import difflib
+import csv
+from datetime import date
 import json
 import os
 import re
@@ -46,6 +48,10 @@ from parse_guidelines import parse_guidelines
 from parse_kimig import parse_kimig, kimig_edges, apply_translation
 from parse_gdpr import parse_gdpr, gdpr_edges
 from parse_bafin import parse_bafin, bafin_edges
+from parse_eu import parse_dora
+from parse_marisk import parse_marisk, marisk_edges
+from model import namespace_nodes, namespace_edges, routed_edges, ns
+from editorial import TOPICS, TAGS, RELATIONS, INTERACTIONS, DORA_AI_LENS
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -53,6 +59,7 @@ DATA = os.path.join(ROOT, "data")
 
 SRC_OJ = os.path.join(HERE, "source-oj.html")
 SRC_OMNIBUS = os.path.join(HERE, "source-omnibus.html")
+SRC_GDPR_OJ = os.path.join(HERE, "source-gdpr-oj.html")
 
 IN_FORCE = "27 July 2026"
 
@@ -213,11 +220,31 @@ def main():
     # English leads where a checked translation exists; German stays alongside.
     kimig_en = apply_translation(kimig, kimig_parts, kimig_meta)
 
-    # The GDPR — the regulation the Act cites most, and defines its data terms by.
+    # The GDPR — consolidated articles plus authentic OJ recitals.
     print("reading the GDPR…")
     gdpr, gdpr_chapters, gdpr_meta = parse_gdpr()
+    gdpr_oj = read_oj(SRC_GDPR_OJ)
+    gdpr_recitals = gdpr_oj["recitals"]
+    for recital in gdpr_recitals:
+        recital["id"] = "gdpr_rct_%s" % recital["num"]
+        recital["label"] = "GDPR recital %s" % recital["num"]
+        recital["corpus"] = "gdpr"
 
-    nodes = articles + all_recitals + annexes + definitions + guidance + kimig + gdpr
+    # DORA and the three technical standards called out in the plan.
+    print("reading DORA and its technical standards…")
+    dora_doc, dora_supporting = parse_dora(HERE)
+
+    # The current MaRisk circular, organised as addressable AT/BT modules.
+    print("reading MaRisk…")
+    marisk, marisk_parts, marisk_meta = parse_marisk()
+
+    dora_nodes = (dora_doc["articles"] + dora_doc["recitals"] + dora_doc["annexes"] +
+                  dora_doc["definitions"])
+    support_nodes = []
+    for support in dora_supporting:
+        support_nodes.extend(support["articles"] + support["recitals"] + support["annexes"])
+    nodes = (articles + all_recitals + annexes + definitions + guidance + kimig + gdpr +
+             gdpr_recitals + dora_nodes + support_nodes + marisk)
     by_id = {n["id"]: n for n in nodes}
 
     # ---- edges -----------------------------------------------------------
@@ -230,6 +257,12 @@ def main():
     # names it — references the deflection guard used to drop.
     edges.extend(gdpr_edges(gdpr, articles + all_recitals + annexes + definitions + guidance,
                             by_id))
+    # GDPR recital-to-article links (the consolidated source does not carry a preamble).
+    edges.extend(build_edges(by_id, gdpr, gdpr_recitals, [], [], doc="gdpr"))
+    edges.extend(dora_doc["edges"])
+    for support in dora_supporting:
+        edges.extend(support["edges"])
+    edges.extend(marisk_edges(marisk, by_id))
 
     # Recital -> provision, for both preambles.
     seen = {(e["s"], e["t"], e["k"]) for e in edges}
@@ -245,6 +278,20 @@ def main():
         deg[e["t"]] += 1
     for n in nodes:
         n["degree"] = deg.get(n["id"], 0)
+
+    # Bare DORA citations in BaFin guidance are contextual rather than named.
+    for section in bafin:
+        for target in article_refs(section["text"], doc="dora", to="dora"):
+            if target in by_id:
+                edges.append({"s": section["id"], "t": target, "k": "cites", "w": 1})
+
+    # Deduplicate before calculating graph degrees.
+    unique = {}
+    for edge in edges:
+        key = (edge["s"], edge["t"], edge["k"])
+        if key not in unique or len(edge) > len(unique[key]):
+            unique[key] = edge
+    edges = list(unique.values())
 
     changed = [n for n in articles + annexes + definitions if n.get("status")]
 
@@ -291,14 +338,106 @@ def main():
         "edges": edges,
     }
 
-    write(os.path.join(DATA, "aiact.json"), doc)
-
     # ---- changes ---------------------------------------------------------
     print("diffing…")
     changes = build_changes(original, current, omni_recitals, edges)
-    write(os.path.join(DATA, "changes.json"), changes)
 
-    report(doc, changes, original)
+    # ---- namespace and split --------------------------------------------
+    # Parsers intentionally keep their source-native, compact IDs.  One pass
+    # converts every node, embedded link, and edge endpoint before writing.
+    mapping = namespace_nodes(nodes)
+    namespaced_edges = namespace_edges(edges, mapping)
+    existing_ids = {node["id"] for node in nodes}
+    external_nodes, routed = routed_edges(nodes, existing_ids)
+    known = {(edge["s"], edge["t"], edge["k"]) for edge in namespaced_edges}
+    known_pairs = {(edge["s"], edge["t"]) for edge in namespaced_edges}
+    for edge in routed:
+        key = (edge["s"], edge["t"], edge["k"])
+        if key not in known and (edge["s"], edge["t"]) not in known_pairs:
+            namespaced_edges.append(edge); known.add(key); known_pairs.add((edge["s"], edge["t"]))
+
+    # Changes are an AI Act data set and use the same canonical IDs.
+    for item in changes["items"]:
+        item["id"] = mapping.get(item["id"], ns(item["id"]))
+        for recital in item.get("recitals", []):
+            recital["id"] = mapping.get(recital["id"], ns(recital["id"]))
+    for recital in changes["recitals"]:
+        if ":" not in recital["id"]:
+            recital["id"] = mapping.get(recital["id"], ns(recital["id"]))
+
+    intra = defaultdict(list)
+    xrefs = []
+    for edge in namespaced_edges:
+        source_corpus = edge["s"].split(":", 1)[0]
+        target_corpus = edge["t"].split(":", 1)[0]
+        if source_corpus == target_corpus and source_corpus != "ext":
+            intra[source_corpus].append(edge)
+        else:
+            if edge["k"] in ("cites", "annex"):
+                edge = dict(edge, sourceKind=edge["k"], k="xcites")
+            xrefs.append(edge)
+
+    def pick(corpus, values):
+        return [node for node in values if node["id"].startswith(corpus + ":")]
+
+    aia_guidance = pick("aia", guidance)
+    corpus_docs = {
+        "aia": {
+            "meta": doc["meta"], "chapters": chapters, "articles": articles,
+            "recitals": all_recitals, "annexes": annexes, "definitions": definitions,
+            "guidance": aia_guidance, "guidanceDocs": guidance_docs[:-1],
+            "footnotes": current["footnotes"], "edges": intra["aia"],
+        },
+        "bafin-ai": {"meta": bafin_doc, "guidance": bafin,
+                     "guidanceDocs": [bafin_doc], "edges": intra["bafin-ai"]},
+        "kimig": {"meta": kimig_meta, "kimig": kimig, "kimigParts": kimig_parts,
+                  "edges": intra["kimig"]},
+        "gdpr": {"meta": gdpr_meta, "gdpr": gdpr, "recitals": gdpr_recitals,
+                 "gdprChapters": gdpr_chapters, "edges": intra["gdpr"]},
+        "dora": dict(dora_doc, edges=intra["dora"]),
+        "marisk": {"meta": marisk_meta, "modules": marisk, "parts": marisk_parts,
+                   "edges": intra["marisk"]},
+    }
+    for support in dora_supporting:
+        slug = support["meta"]["slug"]
+        support["edges"] = intra[slug]
+        corpus_docs[slug] = support
+
+    # Ensure uniform metadata and accurate post-split counts.
+    for slug, corpus_doc in corpus_docs.items():
+        meta = corpus_doc.setdefault("meta", {})
+        meta["slug"] = slug
+        meta.setdefault("sourceUrl", "")
+        meta.setdefault("inForce", meta.get("applies") or meta.get("version") or "")
+        meta["counts"] = dict(meta.get("counts") or {}, edges=len(corpus_doc.get("edges", [])))
+        write(os.path.join(DATA, slug + ".json"), corpus_doc)
+
+    registry = build_registry(corpus_docs)
+    topics = build_topics(nodes)
+    relations = build_relations(registry, existing_ids)
+    by_ns = {node["id"]: node for node in nodes}
+    cross_ids = {edge[end] for edge in xrefs for end in ("s", "t")}
+    endpoint_nodes = []
+    for node_id in sorted(cross_ids):
+        if node_id not in by_ns:
+            continue
+        node = by_ns[node_id]
+        endpoint_nodes.append({key: node[key] for key in
+                               ("id", "type", "corpus", "label", "title", "term", "key", "num", "roman", "sec")
+                               if key in node})
+    write(os.path.join(DATA, "registry.json"), registry)
+    write(os.path.join(DATA, "xrefs.json"), {
+        "nodes": external_nodes + endpoint_nodes, "edges": xrefs,
+        "relations": relations["relations"], "citationCounts": aggregate_citations(xrefs),
+    })
+    write(os.path.join(DATA, "topics.json"), topics)
+    write(os.path.join(DATA, "relations.json"), relations)
+    write(os.path.join(DATA, "changes.json"), changes)
+    write_topics_csv(os.path.join(DATA, "topics.csv"), topics)
+
+    # Report against the old monolith after stripping the new namespaces.
+    doc["edges"] = edges
+    report(doc, changes, original, corpus_docs, len(xrefs))
 
 
 RECITAL_REF = re.compile(r"\b[Rr]ecitals?\s+(\d{1,3})\b")
@@ -458,7 +597,145 @@ def write(path, obj):
         json.dump(obj, fh, ensure_ascii=False, separators=(",", ":"))
 
 
-def report(doc, changes, original):
+def build_registry(corpus_docs):
+    details = {
+        "aia": ("EU horizontal law", 1, "regulation", "European Union"),
+        "gdpr": ("EU horizontal law", 2, "regulation", "European Union"),
+        "dora": ("EU sectoral law", 1, "regulation", "European Union"),
+        "dora-rts-rmf": ("EU sectoral law", 2, "delegated regulation", "European Commission"),
+        "dora-rts-sub": ("EU sectoral law", 3, "delegated regulation", "European Commission"),
+        "dora-its-register": ("EU sectoral law", 4, "implementing regulation", "European Commission"),
+        "kimig": ("German law", 1, "national law", "Germany"),
+        "marisk": ("BaFin", 1, "BaFin circular", "BaFin"),
+        "bafin-ai": ("BaFin", 2, "guidance (non-binding)", "BaFin"),
+    }
+    instruments = []
+    for slug, corpus_doc in corpus_docs.items():
+        meta = corpus_doc["meta"]
+        layer, order, binding, authority = details[slug]
+        count = sum(len(corpus_doc.get(key, [])) for key in
+                    ("articles", "recitals", "annexes", "definitions", "guidance", "kimig", "modules"))
+        instruments.append({
+            "slug": slug, "kind": "instrument", "shortTitle": meta.get("shortTitle") or
+            meta.get("abbr") or meta.get("name") or slug.upper(),
+            "title": meta.get("title") or meta.get("longTitle") or meta.get("name") or slug,
+            "citation": meta.get("cite") or meta.get("celex") or "",
+            "versionDate": meta.get("inForce") or meta.get("version") or "",
+            "layer": layer, "order": order, "bindingLevel": binding, "authority": authority,
+            "status": "in", "sourceUrl": meta.get("sourceUrl", ""),
+            # These two technical standards are supporting evidence for the
+            # third-party-risk story, not standalone reading destinations.
+            "menu": slug not in {"dora-rts-sub", "dora-its-register"},
+            "route": "#/" + slug if slug not in {"dora-rts-sub", "dora-its-register"} else None,
+            "dataFile": "/data/%s.json" % slug, "count": count,
+        })
+    instruments.extend([
+        {"slug": "commission-guidance", "kind": "instrument", "shortTitle": "Commission guidelines",
+         "title": "European Commission guidance on the AI Act", "citation": "Article 5 and 6 guidance",
+         "layer": "EU guidance", "order": 1, "bindingLevel": "guidance (non-binding)",
+         "authority": "European Commission", "status": "in", "route": "#/aia/guidance/pp",
+         "sourceUrl": "", "dataFile": "/data/aia.json"},
+        {"slug": "authority:bafin", "kind": "authority", "shortTitle": "BaFin",
+         "title": "Federal Financial Supervisory Authority", "layer": "Authorities", "order": 1,
+         "bindingLevel": "supervisory authority", "authority": "Germany", "status": "in",
+         "sourceUrl": "https://www.bafin.de/", "route": None},
+        {"slug": "authority:bnetza", "kind": "authority", "shortTitle": "Bundesnetzagentur",
+         "title": "Federal Network Agency", "layer": "Authorities", "order": 2,
+         "bindingLevel": "market surveillance authority", "authority": "Germany", "status": "in",
+         "sourceUrl": "https://www.bundesnetzagentur.de/", "route": None},
+    ])
+    instruments.sort(key=lambda item: (item.get("layer", ""), item.get("order", 99)))
+    return {"generated": date.today().isoformat(), "corpora": instruments}
+
+
+def build_topics(nodes):
+    by_id = {node["id"]: node for node in nodes}
+    topics = [{"slug": slug, "name": name,
+               "note": "Curated provisions concerning %s." % name.lower()} for slug, name in TOPICS]
+    tags = []
+    for row in TAGS:
+        if row["provision"] not in by_id:
+            print("WARN topic tag target %s is not in the corpus" % row["provision"])
+            continue
+        item = dict(row)
+        node = by_id[row["provision"]]
+        item["label"] = node["label"]
+        item["title"] = node.get("title", "")
+        tags.append(item)
+    return {"topics": topics, "tags": tags,
+            "qualifiers": {"role": sorted({t["qualifiers"].get("role") for t in tags if t["qualifiers"].get("role")}),
+                           "applies": sorted({t["qualifiers"].get("applies") for t in tags if t["qualifiers"].get("applies")})}}
+
+
+def build_relations(registry, existing_ids):
+    slugs = {item["slug"] for item in registry["corpora"]}
+    relations = []
+    for relation in RELATIONS:
+        if relation["from"] not in slugs or relation["to"] not in slugs:
+            print("WARN relation names unknown instrument: %s -> %s" %
+                  (relation["from"], relation["to"]))
+            continue
+        missing = [ref for ref in relation["grounding"] if ref.split("/", 1)[0] not in existing_ids]
+        if missing:
+            print("WARN relation %s -> %s has missing grounding %s" %
+                  (relation["from"], relation["to"], missing))
+            continue
+        relations.append(relation)
+    interactions = []
+    for interaction in INTERACTIONS:
+        if interaction["from"] not in slugs or interaction["to"] not in slugs:
+            print("WARN interaction names unknown instrument: %s -> %s" %
+                  (interaction["from"], interaction["to"]))
+            continue
+        refs = [ref for mechanism in interaction["mechanisms"]
+                for ref in mechanism["grounding"]]
+        missing = [ref for ref in refs if ref.split("/", 1)[0] not in existing_ids]
+        if missing:
+            print("WARN interaction %s -> %s has missing grounding %s" %
+                  (interaction["from"], interaction["to"], missing))
+            continue
+        interactions.append(interaction)
+    lens = dict(DORA_AI_LENS)
+    cards = []
+    for card in lens["cards"]:
+        missing = [ref for ref in card["grounding"] if ref.split("/", 1)[0] not in existing_ids]
+        if missing:
+            print("WARN DORA AI lens card %s has missing grounding %s" %
+                  (card["title"], missing))
+            continue
+        cards.append(card)
+    lens["cards"] = cards
+    return {"registry": registry["corpora"], "relations": relations,
+            "interactions": interactions, "doraAiLens": lens}
+
+
+def aggregate_citations(edges):
+    counts = defaultdict(lambda: {"edges": 0, "targets": set()})
+    for edge in edges:
+        if edge["k"] not in ("cites", "xcites", "annex"):
+            continue
+        source = edge["s"].split(":", 1)[0]
+        target = edge["t"].split(":", 1)[0]
+        row = counts[(source, target)]
+        row["edges"] += 1
+        row["targets"].add(edge["t"])
+    return [{"from": source, "to": target, "citations": row["edges"],
+             "provisions": len(row["targets"])}
+            for (source, target), row in sorted(counts.items())]
+
+
+def write_topics_csv(path, topics):
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        writer = csv.writer(fh, lineterminator="\n")
+        writer.writerow(["topic", "instrument", "provision", "role", "applies_to", "effect", "reason"])
+        for tag in topics["tags"]:
+            qualifiers = tag["qualifiers"]
+            writer.writerow([tag["topic"], tag.get("instrument", tag["provision"].split(":", 1)[0]), tag["provision"],
+                             qualifiers.get("role", ""), qualifiers.get("applies", ""),
+                             qualifiers.get("effect", ""), tag["reason"]])
+
+
+def report(doc, changes, original, corpus_docs=None, xref_count=0):
     c = doc["meta"]["counts"]
     print()
     print("articles    %d  (%d in the original)" % (c["articles"], len(original["articles"])))
@@ -479,9 +756,15 @@ def report(doc, changes, original):
     print("changes     %d  (%d inserted · %d amended · %d removed)"
           % (cc["total"], cc["inserted"], cc["amended"], cc["removed"]))
 
-    for name in ("aiact.json", "changes.json"):
+    names = ["changes.json", "registry.json", "xrefs.json", "topics.json"]
+    if corpus_docs:
+        names = sorted(slug + ".json" for slug in corpus_docs) + names
+    for name in names:
         p = os.path.join(DATA, name)
         print("-> data/%-14s %6.0f KB" % (name, os.path.getsize(p) / 1024.0))
+
+    if xref_count:
+        print("cross-refs  %d" % xref_count)
 
     report_edges(committed_edges(), doc["edges"])
 

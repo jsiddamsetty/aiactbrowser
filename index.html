@@ -5,10 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Act Browser — Regulation (EU) 2024/1689</title>
 <meta name="description" content="Read the EU AI Act with its recitals, cross-references, backlinks and a full-size citation graph.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/styles.css">
+<link rel="stylesheet" href="/assets/styles.css?v=20260918-4">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%231A46B8'/><circle cx='16' cy='9' r='3' fill='%23fff'/><circle cx='9' cy='21' r='3' fill='%23fff'/><circle cx='23' cy='21' r='3' fill='%23fff'/></svg>">
 </head>
 <body>
@@ -35,7 +32,8 @@
     <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/></svg>
     <input id="q" type="search" autocomplete="off" spellcheck="false"
            placeholder="Search articles, recitals, annexes, definitions, guidance, KI-MIG, GDPR…"
-           aria-label="Search the Act" aria-expanded="false" aria-controls="results">
+           role="combobox" aria-autocomplete="list" aria-label="Search the Act"
+           aria-expanded="false" aria-controls="results" aria-activedescendant="">
     <kbd class="hint">/</kbd>
     <div id="results" class="results" role="listbox" hidden></div>
   </div>
@@ -44,6 +42,7 @@
     <button id="btn-links" class="icon-btn links-toggle" type="button" aria-label="Show connections" aria-expanded="false">
       <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
     </button>
+    <a class="btn nav-wide" href="#/map"><span>Map</span></a>
     <a id="btn-changes" class="btn" href="#/changes" title="What the 2026 Digital Omnibus changed">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M4 12h16M4 18h7"/><path d="M17 15l3 3-3 3"/></svg>
       <span>Changes</span>
@@ -70,10 +69,10 @@
       <div id="doc-menu" class="doc-menu" role="listbox" aria-label="Documents" hidden></div>
     </div>
     <div class="rail-tabs" id="rail-tabs" role="tablist" aria-label="Parts of the Act">
-      <button class="rail-tab is-on" data-tab="act" role="tab" aria-selected="true">Articles</button>
-      <button class="rail-tab" data-tab="recitals"  role="tab" aria-selected="false">Recitals</button>
-      <button class="rail-tab" data-tab="annexes"   role="tab" aria-selected="false">Annexes</button>
-      <button class="rail-tab" data-tab="defs"      role="tab" aria-selected="false">Terms</button>
+      <button class="rail-tab is-on" data-tab="act" role="tab" aria-selected="true" aria-controls="toc" tabindex="0">Articles</button>
+      <button class="rail-tab" data-tab="recitals"  role="tab" aria-selected="false" aria-controls="toc" tabindex="-1">Recitals</button>
+      <button class="rail-tab" data-tab="annexes"   role="tab" aria-selected="false" aria-controls="toc" tabindex="-1">Annexes</button>
+      <button class="rail-tab" data-tab="defs"      role="tab" aria-selected="false" aria-controls="toc" tabindex="-1">Terms</button>
     </div>
     <div class="rail-body" id="toc"></div>
   </nav>
@@ -146,6 +145,6 @@
 <div class="tip" id="tip" hidden></div>
 
 <script src="/assets/graph.js"></script>
-<script src="/assets/app.js"></script>
+<script src="/assets/app.js?v=20260918-5"></script>
 </body>
 </html>
