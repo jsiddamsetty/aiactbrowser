@@ -46,6 +46,12 @@
 
   function inGerman(n) { return n.type === "kimig" && (kimigLang === "de" || n.lang !== "en"); }
   function kField(n, f) { return inGerman(n) && n[f + "De"] != null ? n[f + "De"] : n[f]; }
+  // Node type describes a provision (article, recital, guidance); corpus
+  // describes the instrument it belongs to. Counts about an instrument must
+  // always use the latter — GDPR, for example, has article and recital types.
+  function corpusOf(n) {
+    return n && (n.corpus || (n.id && n.id.indexOf(":") > 0 ? n.id.split(":")[0] : "aia"));
+  }
 
   function nodeTitle(n, max) {
     if (n.type === "definition") return n.term;
@@ -386,7 +392,7 @@
 
   function docOf(n) {
     if (n.type === "guidance" && n.corpus === "aia") return "gdl-" + n.doc;
-    if (n.corpus && n.corpus !== "aia") return n.corpus;
+    if (corpusOf(n) !== "aia") return corpusOf(n);
     if (n.type === "kimig") return "kimig";
     if (n.type === "gdpr") return "gdpr";
     return "aia";
@@ -437,7 +443,12 @@
     el.docMenu.addEventListener("keydown", docMenuKey);
     el.docMenu.addEventListener("click", function (ev) {
       var o = ev.target.closest(".doc-opt");
-      if (o) chooseDoc(o.dataset.doc);
+      if (!o) return;
+      // Consume clicks on nested labels and badges here, before the document
+      // click handler closes the picker, then route through the app router.
+      ev.preventDefault();
+      ev.stopPropagation();
+      chooseDoc(o.dataset.doc);
     });
     document.addEventListener("click", function (ev) {
       if (!el.docMenu.hidden && !ev.target.closest("#doc-pick")) closeDocMenu(false);
@@ -499,6 +510,8 @@
   function chooseDoc(id) {
     closeDocMenu(true);
     if (id !== tocDoc) el.toc.scrollTop = 0;
+    // Route explicitly instead of relying on the menu item's default browser
+    // behaviour. This also makes lazily loaded corpora such as GDPR reliable.
     go(id === "aia" ? "#/" : docRoute(id));
   }
 
@@ -651,7 +664,7 @@
     var m = DATA.meta, c = m.counts;
     var h = '<div class="home-hero">' +
       '<p class="home-eyebrow">' + esc(m.source) + "</p>" +
-      "<h1>The AI Act, with its recitals attached.</h1>" + checkedOn() + "</div>";
+      "<h1>The EU AI Act</h1>" + checkedOn() + "</div>";
 
     h += '<a class="banner" href="#/changes">' +
       '<span class="banner-tag">In force ' + esc(m.inForce) + "</span>" +
@@ -722,7 +735,7 @@
       var km = DATA.kimigMeta || {};
       var cited = {};
       DATA.kimig.forEach(function (s) {
-        OUT[s.id].forEach(function (e) { if (N[e.t] && N[e.t].type !== "kimig") cited[e.t] = 1; });
+        OUT[s.id].forEach(function (e) { if (corpusOf(N[e.t]) === "aia") cited[e.t] = 1; });
       });
       h += '<div class="block"><div class="block-head"><h2>National implementation</h2>' +
         '<span class="block-count">' + DATA.kimig.length + "</span>" +
@@ -989,7 +1002,7 @@
      recitals, guidance — in the Act's order. */
   function citedFromAct(n) {
     return IN[n.id]
-      .filter(function (e) { return N[e.s] && N[e.s].type !== "gdpr"; })
+      .filter(function (e) { return corpusOf(N[e.s]) === "aia"; })
       .sort(function (a, b) { return actOrder(N[a.s], N[b.s]); });
   }
 
@@ -1060,7 +1073,7 @@
       var label = labels.map(function (text, i) { return '<tspan x="0" dy="' + (i ? 14 : labels.length > 1 ? -4 : 4) + '">' + esc(text) + '</tspan>'; }).join("");
       var body = '<rect x="-88" y="-28" width="176" height="56" rx="10"></rect><text text-anchor="middle">' + label + '</text>';
       if (item.route) {
-        return '<a class="imap-node' + cls + '" href="' + esc(item.route) + '" aria-label="Open ' + esc(item.shortTitle) + ' corpus" transform="translate(' + p.x + ' ' + p.y + ')" tabindex="0">' + body + '</a>';
+        return '<a class="imap-node' + cls + '" href="' + esc(item.route) + '" data-route="' + esc(item.route) + '" aria-label="Open ' + esc(item.shortTitle) + ' corpus" transform="translate(' + p.x + ' ' + p.y + ')" tabindex="0">' + body + '</a>';
       }
       return '<g class="imap-node is-static' + cls + '" aria-label="' + esc(item.shortTitle) + ' — no corpus available" transform="translate(' + p.x + ' ' + p.y + ')" tabindex="0">' + body + '</g>';
     }).join("");
@@ -1071,12 +1084,26 @@
       specifies: "Adds detailed requirements", applies: "Applies sector rules to AI",
       "recognises-ai": "Expressly brings AI into model governance"
     };
-    el.doc.innerHTML = '<div class="home-hero portal-hero"><p class="home-eyebrow">Interaction map</p><h1>How the rules connect.</h1><p>The AI Act is the central reference point. Connected instruments, standards and supervisory guidance sit around it.</p></div>' +
-      '<div class="block map-network-block"><div class="block-head"><h2>Instrument-level legal relationships</h2><span class="block-note">Hover an arrow for a preview; click to keep the detail open</span></div>' +
-      '<div class="map-key" aria-label="Map key"><span><i class="key-line legal"></i><b>Directed legal relationship</b></span><span><b>Large node</b> — relationship hub</span><span>Select a menu corpus to open it</span><span>Supporting standards stay in the map</span></div>' +
+    el.doc.innerHTML = '<div class="home-hero portal-hero"><p class="home-eyebrow">Interaction map</p><h1>How the rules connect.</h1></div>' +
+      '<div class="block map-network-block"><div class="block-head"><h2>Instrument-level legal relationships</h2><span class="block-note">A curated overview, not a count of every citation</span></div>' +
+      '<div class="map-key" aria-label="Map key"><span><i class="key-line legal"></i><b>Directed legal relationship</b></span><span><b>Large node</b> — relationship hub</span></div>' +
       '<div class="imap-wrap"><svg class="imap" role="img" aria-label="Interactive map of legal relationships, grouped into EU framework and financial-sector implementation" viewBox="0 0 ' + width + ' ' + height + '"><defs><marker id="imap-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs><g class="imap-clusters"><rect class="imap-band imap-band-eu" x="24" y="24" width="672" height="452" rx="16"></rect><text class="imap-band-label" x="52" y="58">EU framework &amp; national implementation</text><rect class="imap-band imap-band-finance" x="724" y="24" width="552" height="452" rx="16"></rect><text class="imap-band-label" x="752" y="58">Financial-sector governance</text></g>' + lines + nodes + '</svg></div>' +
-      '<section class="map-detail" id="map-detail" aria-live="polite"><p class="map-detail-prompt">Hover an arrow to see the relationship. Click an arrow to keep its legal basis and concrete mechanisms visible.</p></section></div>';
+      '<section class="map-detail" id="map-detail" aria-live="polite"><p class="map-detail-prompt">Hover an arrow to see the relationship. Click an arrow to keep its legal basis and representative mechanisms visible.</p></section></div>';
     wireMapDetails(relations, networkNames, kindNames);
+    wireMapNodes();
+  }
+
+  function wireMapNodes() {
+    el.doc.querySelectorAll(".imap-node[data-route]").forEach(function (node) {
+      function open(event) {
+        event.preventDefault();
+        go(node.dataset.route);
+      }
+      node.addEventListener("click", open);
+      node.addEventListener("keydown", function (event) {
+        if (event.key === "Enter" || event.key === " ") open(event);
+      });
+    });
   }
 
   function wireMapDetails(relations, names, kindNames) {
@@ -1086,7 +1113,7 @@
     function clear() {
       if (locked !== null) return;
       edges.forEach(function (edge) { edge.classList.remove("is-active"); });
-      detail.innerHTML = '<p class="map-detail-prompt">Hover an arrow to see the relationship. Click an arrow to keep its legal basis and concrete mechanisms visible.</p>';
+      detail.innerHTML = '<p class="map-detail-prompt">Hover an arrow to see the relationship. Click an arrow to keep its legal basis and representative mechanisms visible.</p>';
     }
     function show(index, shouldLock) {
       var relation = relations[index]; if (!relation) return;
@@ -1096,7 +1123,7 @@
       var bridges = (RELATIONS.interactions || []).filter(function (bridge) {
         return bridge.from === relation.from && bridge.to === relation.to;
       });
-      var mechanismHtml = bridges.length ? '<div class="map-detail-mechanisms"><h4>Concrete mechanisms</h4>' + bridges.map(function (bridge) {
+      var mechanismHtml = bridges.length ? '<div class="map-detail-mechanisms"><h4>Representative mechanisms</h4>' + bridges.map(function (bridge) {
         return bridge.mechanisms.map(function (mechanism) {
           return '<article><h5>' + esc(mechanism.name) + '</h5><span>' + esc(mechanism.kind) + '</span><p>' + esc(mechanism.explanation) + '</p><div class="relation-basis"><b>Connected through</b>' + mechanism.grounding.map(groundingLink).join("") + '</div></article>';
         }).join("");
@@ -1520,7 +1547,7 @@
      folds into its document's own groups. */
   function renderGuidanceFor(root, n) {
     var gs = IN[n.id]
-      .filter(function (e) { return e.k === "interprets" && N[e.s] && N[e.s].type === "guidance"; })
+      .filter(function (e) { return e.k === "interprets" && N[e.s] && N[e.s].type === "guidance" && corpusOf(N[e.s]) === corpusOf(n); })
       .map(function (e) { return N[e.s]; })
       .sort(function (a, b) { return a.num - b.num; });
     if (!gs.length) return;
@@ -1624,7 +1651,7 @@
   /* Where German law picks a provision up: the KI-MIG sections citing it. */
   function renderKimigFor(root, n) {
     var ks = IN[n.id]
-      .filter(function (e) { return N[e.s] && N[e.s].type === "kimig"; })
+      .filter(function (e) { return corpusOf(N[e.s]) === "kimig"; })
       .map(function (e) { return N[e.s]; })
       .sort(function (a, b) { return a.num - b.num; });
     if (!ks.length) return;
@@ -1711,7 +1738,7 @@
   function recitalsFor(id) {
     return IN[id]
       .filter(function (e) { return e.k === "explains" || e.k === "relates"; })
-      .filter(function (e) { return N[e.s] && N[e.s].type === "recital"; })
+      .filter(function (e) { return N[e.s] && N[e.s].type === "recital" && corpusOf(N[e.s]) === corpusOf(N[id]); })
       .map(function (e) { return { r: N[e.s], k: e.k }; })
       .sort(function (a, b) { return a.r.num - b.r.num; });
   }

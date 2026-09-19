@@ -52,6 +52,7 @@ from parse_eu import parse_dora
 from parse_marisk import parse_marisk, marisk_edges
 from model import namespace_nodes, namespace_edges, routed_edges, ns
 from editorial import TOPICS, TAGS, RELATIONS, INTERACTIONS, DORA_AI_LENS
+import static_pages
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -434,6 +435,7 @@ def main():
     write(os.path.join(DATA, "relations.json"), relations)
     write(os.path.join(DATA, "changes.json"), changes)
     write_topics_csv(os.path.join(DATA, "topics.csv"), topics)
+    static_pages.main()
 
     # Report against the old monolith after stripping the new namespaces.
     doc["edges"] = edges
