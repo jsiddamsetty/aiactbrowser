@@ -997,17 +997,18 @@
 
   function renderMap() {
     var items = (REGISTRY.corpora || []).slice();
-    // A wide, shallow map keeps the entire network in a desktop viewport.
-    // The original portrait-like geometry made readers scroll just to see
-    // the supporting standards at the bottom of the graph.
-    var width = 1200, height = 500;
+    // This is a relationship map, not a force graph: its geometry carries
+    // meaning. The EU framework is read left-to-right on the left; the
+    // financial-sector implementation stack is a separate, calmer cluster
+    // on the right. That keeps the long cross-framework bridge deliberate.
+    var width = 1300, height = 500;
     var positions = {
-      "aia": { x: 600, y: 210 }, "gdpr": { x: 600, y: 62 },
-      "commission-guidance": { x: 285, y: 112 }, "kimig": { x: 245, y: 220 },
-      "authority:bafin": { x: 540, y: 300 }, "authority:bnetza": { x: 95, y: 370 },
-      "marisk": { x: 790, y: 330 }, "dora": { x: 600, y: 395 },
-      "bafin-ai": { x: 170, y: 455 }, "dora-rts-rmf": { x: 740, y: 455 },
-      "dora-rts-sub": { x: 940, y: 420 }, "dora-its-register": { x: 1080, y: 335 }
+      "gdpr": { x: 545, y: 84 }, "aia": { x: 545, y: 230 },
+      "authority:bafin": { x: 545, y: 394 }, "commission-guidance": { x: 180, y: 132 },
+      "kimig": { x: 180, y: 282 }, "authority:bnetza": { x: 180, y: 414 },
+      "marisk": { x: 865, y: 96 }, "bafin-ai": { x: 1110, y: 112 },
+      "dora": { x: 985, y: 272 }, "dora-rts-rmf": { x: 775, y: 438 },
+      "dora-rts-sub": { x: 985, y: 438 }, "dora-its-register": { x: 1190, y: 438 }
     };
     var networkNames = {
       "aia": ["EU AI Act"], "commission-guidance": ["Commission", "guidelines"],
@@ -1022,12 +1023,35 @@
       var t = Math.min(tx, ty);
       return { x: from.x + dx * t, y: from.y + dy * t };
     }
+    function pathFor(rel, a, b) {
+      var start = edgePoint(a, b), end = edgePoint(b, a);
+      var key = rel.from + ":" + rel.to;
+      // The routes that leave their cluster use a shallow, intentional curve;
+      // all other routes stay close to their source and destination. This
+      // avoids the accidental criss-crossing caused by a collection of lines.
+      var routes = {
+        "commission-guidance:aia": "M268 132 C355 132 397 218 457 218",
+        "kimig:aia": "M268 282 C350 282 390 258 457 244",
+        "aia:gdpr": "M545 202 L545 112",
+        "aia:authority:bafin": "M530 258 C526 305 526 335 526 366",
+        "kimig:authority:bafin": "M268 294 C360 312 412 356 457 382",
+        "kimig:authority:bnetza": "M180 310 L180 386",
+        "kimig:dora": "M268 282 C485 306 695 306 897 282",
+        "marisk:aia": "M777 96 C685 96 692 202 633 218",
+        "marisk:dora": "M865 124 C865 185 895 218 897 258",
+        "bafin-ai:dora": "M1110 140 C1105 200 1080 231 1073 258",
+        "dora-rts-rmf:dora": "M775 410 C790 350 845 313 897 286",
+        "dora-rts-sub:dora": "M985 410 L985 300",
+        "dora-its-register:dora": "M1190 410 C1170 350 1115 313 1073 286"
+      };
+      return routes[key] || ("M" + start.x + " " + start.y + " L" + end.x + " " + end.y);
+    }
     var relations = RELATIONS.relations || [];
     var lines = relations.map(function (rel, index) {
       var a = positions[rel.from], b = positions[rel.to];
       if (!a || !b) return "";
-      var start = edgePoint(a, b), end = edgePoint(b, a);
-      return '<g class="imap-relation" data-relation="' + index + '" role="button" tabindex="0" aria-label="Show how ' + esc((networkNames[rel.from] || [rel.from]).join(" ")) + ' relates to ' + esc((networkNames[rel.to] || [rel.to]).join(" ")) + '"><line class="imap-edge-hit" x1="' + start.x + '" y1="' + start.y + '" x2="' + end.x + '" y2="' + end.y + '"></line><line class="imap-edge imap-legal" marker-end="url(#imap-arrow)" x1="' + start.x + '" y1="' + start.y + '" x2="' + end.x + '" y2="' + end.y + '"><title>' + esc(rel.explanation) + '</title></line></g>';
+      var route = pathFor(rel, a, b);
+      return '<g class="imap-relation" data-relation="' + index + '" role="button" tabindex="0" aria-label="Show how ' + esc((networkNames[rel.from] || [rel.from]).join(" ")) + ' relates to ' + esc((networkNames[rel.to] || [rel.to]).join(" ")) + '"><path class="imap-edge-hit" d="' + route + '"></path><path class="imap-edge imap-legal" marker-end="url(#imap-arrow)" d="' + route + '"><title>' + esc(rel.explanation) + '</title></path></g>';
     }).join("");
     var nodes = items.map(function (item) {
       var p = positions[item.slug]; if (!p) return "";
@@ -1050,7 +1074,7 @@
     el.doc.innerHTML = '<div class="home-hero portal-hero"><p class="home-eyebrow">Interaction map</p><h1>How the rules connect.</h1><p>The AI Act is the central reference point. Connected instruments, standards and supervisory guidance sit around it.</p></div>' +
       '<div class="block map-network-block"><div class="block-head"><h2>Instrument-level legal relationships</h2><span class="block-note">Hover an arrow for a preview; click to keep the detail open</span></div>' +
       '<div class="map-key" aria-label="Map key"><span><i class="key-line legal"></i><b>Directed legal relationship</b></span><span><b>Large node</b> — relationship hub</span><span>Select a menu corpus to open it</span><span>Supporting standards stay in the map</span></div>' +
-      '<div class="imap-wrap"><svg class="imap" role="img" aria-label="Interactive network of legal relationships centred on the EU AI Act" viewBox="0 0 ' + width + ' ' + height + '"><defs><marker id="imap-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs>' + lines + nodes + '</svg></div>' +
+      '<div class="imap-wrap"><svg class="imap" role="img" aria-label="Interactive map of legal relationships, grouped into EU framework and financial-sector implementation" viewBox="0 0 ' + width + ' ' + height + '"><defs><marker id="imap-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs><g class="imap-clusters"><rect class="imap-band imap-band-eu" x="24" y="24" width="672" height="452" rx="16"></rect><text class="imap-band-label" x="52" y="58">EU framework &amp; national implementation</text><rect class="imap-band imap-band-finance" x="724" y="24" width="552" height="452" rx="16"></rect><text class="imap-band-label" x="752" y="58">Financial-sector governance</text></g>' + lines + nodes + '</svg></div>' +
       '<section class="map-detail" id="map-detail" aria-live="polite"><p class="map-detail-prompt">Hover an arrow to see the relationship. Click an arrow to keep its legal basis and concrete mechanisms visible.</p></section></div>';
     wireMapDetails(relations, networkNames, kindNames);
   }

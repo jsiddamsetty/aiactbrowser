@@ -1474,12 +1474,14 @@ sup.fn:hover { color: var(--accent); }
 .key-line { display:inline-block; width:32px; height:0; border-top:1px solid var(--ink-3); }
 .key-line.legal { border-top:3px solid var(--accent); }
 .imap-wrap { overflow:auto; border:1px solid var(--line); border-radius:12px; background:var(--panel); }
-.imap { width:100%; height:min(55vh,420px); min-width:900px; display:block; }
-.imap-band { fill:color-mix(in srgb,var(--paper) 75%,var(--panel)); stroke:var(--line); stroke-width:.6; }
-.imap-band-label { fill:var(--ink-2); font:600 13px var(--sans); text-transform:uppercase; letter-spacing:.05em; }
-.imap-edge { fill:none; stroke:var(--ink-3); opacity:.58; transition:stroke-width .14s, opacity .14s, stroke .14s; }
+.imap { width:100%; height:min(55vh,420px); min-width:1000px; display:block; }
+.imap-band { fill:color-mix(in srgb,var(--paper) 68%,var(--panel)); stroke:var(--rule); stroke-width:1; }
+.imap-band-eu { fill:color-mix(in srgb,var(--c-article-bg) 45%,var(--panel)); }
+.imap-band-finance { fill:color-mix(in srgb,var(--c-module-bg) 32%,var(--panel)); }
+.imap-band-label { fill:var(--ink-2); font:600 12px var(--mono); text-transform:uppercase; letter-spacing:.08em; }
+.imap-edge { fill:none; stroke:var(--ink-3); opacity:.62; stroke-linecap:round; stroke-linejoin:round; transition:stroke-width .14s, opacity .14s, stroke .14s; }
 .imap-legal { stroke:var(--accent); stroke-width:2.4; }
-.imap-edge-hit { stroke:var(--paper); stroke-opacity:.01; stroke-width:24; pointer-events:stroke; }
+.imap-edge-hit { fill:none; stroke:var(--paper); stroke-opacity:.01; stroke-width:24; pointer-events:stroke; }
 .imap-relation { cursor:pointer; outline:none; }
 .imap-relation:hover .imap-edge,.imap-relation:focus .imap-edge,.imap-relation.is-active .imap-edge { stroke:var(--c-guidance); stroke-width:5; opacity:1; }
 .imap-relation:focus-visible .imap-edge { stroke:var(--focus); stroke-width:5; opacity:1; }
@@ -1523,7 +1525,7 @@ sup.fn:hover { color: var(--accent); }
   .portal-actions { grid-template-columns:1fr; }
   .portal-wide .doc { padding:20px 24px 30vh; }
   .portal-wide .portal-hero h1 { font-size:clamp(30px,7vw,42px); }
-  .imap { min-width:760px; }
+  .imap { min-width:1000px; }
 }
 
 @media (max-width: 560px) {
