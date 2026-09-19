@@ -1462,13 +1462,19 @@ sup.fn:hover { color: var(--accent); }
 .dora-ai-cards .relation-basis { margin-top:auto; }
 .dora-ai-browse { margin:18px 0 0; color:var(--ink-3); font-size:12px; }
 
-.portal-hero { max-width:78ch; }
-.map-key { display:flex; flex-wrap:wrap; gap:12px 22px; color:var(--ink-2); font-size:12px; margin:0 0 16px; }
+.portal-wide .doc { padding-top:18px; }
+.portal-wide .portal-hero { max-width:64rem; margin-bottom:12px; }
+.portal-wide .portal-hero .home-eyebrow { margin-bottom:5px; }
+.portal-wide .portal-hero h1 { max-width:none; margin-bottom:5px; font-size:clamp(30px,2.8vw,40px); line-height:1.08; }
+.portal-wide .portal-hero p { max-width:none; font-size:15px; line-height:1.4; }
+.portal-wide .map-network-block { margin-top:20px; }
+.map-network-block > .block-head { margin-bottom:6px; }
+.map-key { display:flex; flex-wrap:wrap; gap:8px 20px; color:var(--ink-2); font-size:12px; margin:0 0 10px; }
 .map-key span { display:flex; align-items:center; gap:7px; }
 .key-line { display:inline-block; width:32px; height:0; border-top:1px solid var(--ink-3); }
 .key-line.legal { border-top:3px solid var(--accent); }
 .imap-wrap { overflow:auto; border:1px solid var(--line); border-radius:12px; background:var(--panel); }
-.imap { width:100%; min-width:900px; display:block; }
+.imap { width:100%; height:min(55vh,420px); min-width:900px; display:block; }
 .imap-band { fill:color-mix(in srgb,var(--paper) 75%,var(--panel)); stroke:var(--line); stroke-width:.6; }
 .imap-band-label { fill:var(--ink-2); font:600 13px var(--sans); text-transform:uppercase; letter-spacing:.05em; }
 .imap-edge { fill:none; stroke:var(--ink-3); opacity:.58; transition:stroke-width .14s, opacity .14s, stroke .14s; }
@@ -1515,7 +1521,8 @@ sup.fn:hover { color: var(--accent); }
 @media (max-width: 900px) {
   .nav-wide { display:none; }
   .portal-actions { grid-template-columns:1fr; }
-  .portal-wide .doc { padding:28px 24px 30vh; }
+  .portal-wide .doc { padding:20px 24px 30vh; }
+  .portal-wide .portal-hero h1 { font-size:clamp(30px,7vw,42px); }
   .imap { min-width:760px; }
 }
 

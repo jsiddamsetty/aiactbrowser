@@ -997,14 +997,17 @@
 
   function renderMap() {
     var items = (REGISTRY.corpora || []).slice();
-    var width = 1200, height = 820;
+    // A wide, shallow map keeps the entire network in a desktop viewport.
+    // The original portrait-like geometry made readers scroll just to see
+    // the supporting standards at the bottom of the graph.
+    var width = 1200, height = 500;
     var positions = {
-      "aia": { x: 600, y: 330 }, "gdpr": { x: 600, y: 80 },
-      "commission-guidance": { x: 285, y: 140 }, "kimig": { x: 245, y: 330 },
-      "authority:bafin": { x: 540, y: 455 }, "authority:bnetza": { x: 95, y: 565 },
-      "marisk": { x: 790, y: 500 }, "dora": { x: 600, y: 630 },
-      "bafin-ai": { x: 170, y: 735 }, "dora-rts-rmf": { x: 740, y: 760 },
-      "dora-rts-sub": { x: 940, y: 700 }, "dora-its-register": { x: 1080, y: 535 }
+      "aia": { x: 600, y: 210 }, "gdpr": { x: 600, y: 62 },
+      "commission-guidance": { x: 285, y: 112 }, "kimig": { x: 245, y: 220 },
+      "authority:bafin": { x: 540, y: 300 }, "authority:bnetza": { x: 95, y: 370 },
+      "marisk": { x: 790, y: 330 }, "dora": { x: 600, y: 395 },
+      "bafin-ai": { x: 170, y: 455 }, "dora-rts-rmf": { x: 740, y: 455 },
+      "dora-rts-sub": { x: 940, y: 420 }, "dora-its-register": { x: 1080, y: 335 }
     };
     var networkNames = {
       "aia": ["EU AI Act"], "commission-guidance": ["Commission", "guidelines"],
@@ -1044,7 +1047,7 @@
       specifies: "Adds detailed requirements", applies: "Applies sector rules to AI",
       "recognises-ai": "Expressly brings AI into model governance"
     };
-    el.doc.innerHTML = '<div class="home-hero portal-hero"><p class="home-eyebrow">Interaction map</p><h1>How requirements connect across instruments.</h1><p>The AI Act is the central reference point. Instruments it directly touches sit around it; DORA forms a second hub for its own technical standards and supervisory guidance.</p></div>' +
+    el.doc.innerHTML = '<div class="home-hero portal-hero"><p class="home-eyebrow">Interaction map</p><h1>How the rules connect.</h1><p>The AI Act is the central reference point. Connected instruments, standards and supervisory guidance sit around it.</p></div>' +
       '<div class="block map-network-block"><div class="block-head"><h2>Instrument-level legal relationships</h2><span class="block-note">Hover an arrow for a preview; click to keep the detail open</span></div>' +
       '<div class="map-key" aria-label="Map key"><span><i class="key-line legal"></i><b>Directed legal relationship</b></span><span><b>Large node</b> — relationship hub</span><span>Select a menu corpus to open it</span><span>Supporting standards stay in the map</span></div>' +
       '<div class="imap-wrap"><svg class="imap" role="img" aria-label="Interactive network of legal relationships centred on the EU AI Act" viewBox="0 0 ' + width + ' ' + height + '"><defs><marker id="imap-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs>' + lines + nodes + '</svg></div>' +
