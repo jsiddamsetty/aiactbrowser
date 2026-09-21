@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Act Browser — Regulation (EU) 2024/1689</title>
 <meta name="description" content="Read the EU AI Act with its recitals, cross-references, backlinks and a full-size citation graph.">
-<link rel="stylesheet" href="/assets/styles.css?v=20260919-3">
+<link rel="stylesheet" href="/assets/styles.css?v=20260921-2">
 <link rel="stylesheet" href="/assets/static.css">
 <script>document.documentElement.classList.add("js");</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%231A46B8'/><circle cx='16' cy='9' r='3' fill='%23fff'/><circle cx='9' cy='21' r='3' fill='%23fff'/><circle cx='23' cy='21' r='3' fill='%23fff'/></svg>">
@@ -44,8 +44,8 @@
   <div class="search" role="search">
     <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/></svg>
     <input id="q" type="search" autocomplete="off" spellcheck="false"
-           placeholder="Search articles, recitals, annexes, definitions, guidance, KI-MIG, GDPR…"
-           role="combobox" aria-autocomplete="list" aria-label="Search the Act"
+           placeholder="Search articles, guidance, regulations…"
+           role="combobox" aria-autocomplete="list" aria-label="Search all documents"
            aria-expanded="false" aria-controls="results" aria-activedescendant="">
     <kbd class="hint">/</kbd>
     <div id="results" class="results" role="listbox" hidden></div>
@@ -55,7 +55,7 @@
     <button id="btn-links" class="icon-btn links-toggle" type="button" aria-label="Show connections" aria-expanded="false">
       <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
     </button>
-    <a class="btn nav-wide" href="#/map"><span>Map</span></a>
+    <a id="btn-map" class="btn nav-wide" href="#/map"><span>Map</span></a>
     <a id="btn-changes" class="btn" href="#/changes" title="What the 2026 Digital Omnibus changed">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M4 12h16M4 18h7"/><path d="M17 15l3 3-3 3"/></svg>
       <span>Changes</span>
@@ -116,7 +116,7 @@
         </div>
       </div>
       <div class="gcanvas-wrap">
-        <canvas id="gmini"></canvas>
+        <canvas id="gmini" aria-hidden="true"></canvas>
         <p class="gempty" id="gempty" hidden>No connections to show.</p>
       </div>
       <div class="legend" id="legend"></div>
@@ -127,7 +127,7 @@
 </div>
 
 <!-- ── full-screen graph ──────────────────────────────────────── -->
-<div class="overlay" id="overlay" hidden>
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="ov-title" hidden>
   <div class="overlay-bar">
     <div class="overlay-title">
       <h2 id="ov-title">Citation graph</h2>
@@ -135,6 +135,10 @@
     </div>
 
     <div class="overlay-controls">
+      <div class="seg" id="ov-view" role="group" aria-label="Graph presentation">
+        <button class="seg-btn is-on" data-view="graph" type="button" aria-pressed="true">Visual</button>
+        <button class="seg-btn" data-view="list" type="button" aria-pressed="false">List</button>
+      </div>
       <div class="seg" id="ov-scope" role="group" aria-label="Graph scope">
         <button class="seg-btn" data-scope="focus" type="button">Neighbourhood</button>
         <button class="seg-btn is-on" data-scope="all" type="button">Whole Act</button>
@@ -151,13 +155,14 @@
       <svg viewBox="0 0 24 24"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
     </button>
   </div>
-  <canvas id="gfull"></canvas>
+  <canvas id="gfull" aria-hidden="true"></canvas>
+  <div class="graph-list" id="gfull-list" tabindex="-1" hidden></div>
   <div class="ov-hint"><kbd>drag</kbd> pan · <kbd>scroll</kbd> zoom · <kbd>click</kbd> open · <kbd>esc</kbd> close</div>
 </div>
 
 <div class="tip" id="tip" hidden></div>
 
 <script src="/assets/graph.js"></script>
-<script src="/assets/app.js?v=20260919-7"></script>
+<script src="/assets/app.js?v=20260921-2"></script>
 </body>
 </html>

@@ -9,6 +9,7 @@
   var N = {};            // id -> node
   var OUT = {};          // id -> [edge]
   var IN = {};           // id -> [edge]
+  var EDGES = [];        // aggregated runtime edges; corpus documents stay immutable
   var TERM_RE = null;    // defined terms, longest first
   var TERM_BY_KEY = {};
   var SEARCH = [];
@@ -30,6 +31,7 @@
     show: Object.assign({}, ALL_TYPES),
     ovShow: Object.assign({}, ALL_TYPES),
     edgeShow: { cited: true, cross: true, editorial: true, derived: true },
+    ovView: "graph",
     ovFocus: null,          // provision the expanded graph is centred on
     ovScope: "all",         // "focus" | "all"
     ovDepth: 1
@@ -137,12 +139,12 @@
     (XREFS.nodes || []).forEach(function (node) { if (!loadedIds[node.id]) all.push(node); });
     all.forEach(function (n) { N[n.id] = n; OUT[n.id] = []; IN[n.id] = []; });
 
-    DATA.edges = [];
+    EDGES = [];
     Object.keys(CORPUS_DOCS).forEach(function (slug) {
-      DATA.edges = DATA.edges.concat(CORPUS_DOCS[slug].edges || []);
+      EDGES = EDGES.concat(CORPUS_DOCS[slug].edges || []);
     });
-    DATA.edges = DATA.edges.concat(XREFS.edges || []);
-    DATA.edges.forEach(function (e) {
+    EDGES = EDGES.concat(XREFS.edges || []);
+    EDGES.forEach(function (e) {
       if (!N[e.s] || !N[e.t]) return;
       OUT[e.s].push(e);
       IN[e.t].push(e);
@@ -279,6 +281,8 @@
   /* The hash that reopens a route — where closing the graph overlay returns. */
   function hashOf(route) {
     if (!route) return "#/";
+    if (route.kind === "map") return "#/map";
+    if (route.kind === "changes") return "#/changes" + (route.focus ? "/" + encodeURIComponent(route.focus) : "");
     if (route.kind === "doc") return docRoute(route.doc);
     return route.id ? routeOf(route.id) : "#/";
   }
@@ -307,13 +311,16 @@
         renderHome();
       }
       openOverlay(r.focus);
+      syncPrimaryNav("graph");
       return;
     }
     if (!el.overlay.hidden) closeOverlay(true);
 
     state.route = r;
     closeRails();
-    document.body.classList.toggle("portal-wide", r.kind === "map");
+    document.body.classList.toggle("portal-wide", r.kind === "map" || r.kind === "changes");
+    document.body.classList.toggle("changes-wide", r.kind === "changes");
+    syncPrimaryNav(r.kind);
 
     if (r.kind === "map") {
       renderMap(); renderGraphFor(null); el.conn.innerHTML = ""; markToc(null);
@@ -347,6 +354,17 @@
     }
     el.doc.parentNode.scrollTop = 0;
     window.scrollTo(0, 0);
+  }
+
+  function syncPrimaryNav(kind) {
+    var map = $("#btn-map"), changes = $("#btn-changes"), graph = $("#btn-graph");
+    [map, changes].forEach(function (item) {
+      item.classList.remove("is-current");
+      item.removeAttribute("aria-current");
+    });
+    if (kind === "map") { map.classList.add("is-current"); map.setAttribute("aria-current", "page"); }
+    if (kind === "changes") { changes.classList.add("is-current"); changes.setAttribute("aria-current", "page"); }
+    graph.setAttribute("aria-pressed", kind === "graph" || !el.overlay.hidden ? "true" : "false");
   }
 
   /* ── contents rail ────────────────────────────────────────── */
@@ -672,7 +690,7 @@
       c.changed + " provisions</b> added or rewritten.</span>" +
       '<span class="banner-go">See what changed →</span></a>';
 
-    h += '<div class="portal-actions"><a class="portal-card" href="#/map"><b>Interaction map</b><span>Concrete bridges between requirements across instruments →</span></a></div>';
+    h += '<div class="portal-actions"><a class="portal-card" href="#/map"><b>Legal relationship map</b><span>Connections between the AI Act, GDPR, DORA, KI-MIG and supervisory guidance →</span></a></div>';
 
     /* the GDPR, which the Act defines its data terms by */
     if (DATA.gdpr && DATA.gdpr.length) {
@@ -1071,7 +1089,7 @@
       var cls = item.slug === "aia" ? " is-root" : item.slug === "dora" ? " is-hub" : item.status === "stub" ? " is-stub" : item.kind === "authority" ? " is-authority" : "";
       var labels = networkNames[item.slug] || [item.shortTitle];
       var label = labels.map(function (text, i) { return '<tspan x="0" dy="' + (i ? 14 : labels.length > 1 ? -4 : 4) + '">' + esc(text) + '</tspan>'; }).join("");
-      var body = '<rect x="-88" y="-28" width="176" height="56" rx="10"></rect><text text-anchor="middle">' + label + '</text>';
+      var body = '<rect x="-88" y="-28" width="176" height="56" rx="2"></rect><text text-anchor="middle">' + label + '</text>';
       if (item.route) {
         return '<a class="imap-node' + cls + '" href="' + esc(item.route) + '" data-route="' + esc(item.route) + '" aria-label="Open ' + esc(item.shortTitle) + ' corpus" transform="translate(' + p.x + ' ' + p.y + ')" tabindex="0">' + body + '</a>';
       }
@@ -1084,11 +1102,18 @@
       specifies: "Adds detailed requirements", applies: "Applies sector rules to AI",
       "recognises-ai": "Expressly brings AI into model governance"
     };
-    el.doc.innerHTML = '<div class="home-hero portal-hero"><p class="home-eyebrow">Interaction map</p><h1>How the rules connect.</h1></div>' +
-      '<div class="block map-network-block"><div class="block-head"><h2>Instrument-level legal relationships</h2><span class="block-note">A curated overview, not a count of every citation</span></div>' +
+    var relationList = relations.map(function (rel, index) {
+      return '<button class="map-rel-btn" type="button" data-relation="' + index + '" aria-pressed="false"><span>' +
+        esc((networkNames[rel.from] || [rel.from]).join(" ")) + ' <b aria-hidden="true">→</b> ' +
+        esc((networkNames[rel.to] || [rel.to]).join(" ")) + '</span><small>' +
+        esc(kindNames[rel.kind] || rel.kind.replace(/-/g, " ")) + '</small></button>';
+    }).join("");
+    el.doc.innerHTML = '<div class="home-hero portal-hero"><p class="home-eyebrow">Reference map</p><h1>Legal relationships between instruments</h1></div>' +
+      '<div class="block map-network-block"><div class="block-head"><h2>Relationships</h2><span class="block-note">Direction indicates legal effect; citations appear in the detail view</span></div>' +
       '<div class="map-key" aria-label="Map key"><span><i class="key-line legal"></i><b>Directed legal relationship</b></span><span><b>Large node</b> — relationship hub</span></div>' +
-      '<div class="imap-wrap"><svg class="imap" role="img" aria-label="Interactive map of legal relationships, grouped into EU framework and financial-sector implementation" viewBox="0 0 ' + width + ' ' + height + '"><defs><marker id="imap-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs><g class="imap-clusters"><rect class="imap-band imap-band-eu" x="24" y="24" width="672" height="452" rx="16"></rect><text class="imap-band-label" x="52" y="58">EU framework &amp; national implementation</text><rect class="imap-band imap-band-finance" x="724" y="24" width="552" height="452" rx="16"></rect><text class="imap-band-label" x="752" y="58">Financial-sector governance</text></g>' + lines + nodes + '</svg></div>' +
-      '<section class="map-detail" id="map-detail" aria-live="polite"><p class="map-detail-prompt">Hover an arrow to see the relationship. Click an arrow to keep its legal basis and representative mechanisms visible.</p></section></div>';
+      '<div class="imap-wrap"><svg class="imap" role="group" aria-labelledby="imap-title imap-desc" viewBox="0 0 ' + width + ' ' + height + '"><title id="imap-title">Legal relationships between instruments</title><desc id="imap-desc">Interactive map grouped into EU framework and financial-sector governance. Focus a relationship for its legal basis.</desc><defs><marker id="imap-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs><g class="imap-clusters"><rect class="imap-band imap-band-eu" x="24" y="24" width="672" height="452" rx="2"></rect><text class="imap-band-label" x="52" y="58">EU framework &amp; national implementation</text><rect class="imap-band imap-band-finance" x="724" y="24" width="552" height="452" rx="2"></rect><text class="imap-band-label" x="752" y="58">Financial-sector governance</text></g>' + lines + nodes + '</svg></div>' +
+      '<div class="map-rel-list" aria-label="Legal relationships">' + relationList + '</div>' +
+      '<section class="map-detail" id="map-detail" aria-live="polite"><p class="map-detail-prompt">Select a relationship to inspect its legal basis and relevant provisions.</p></section></div>';
     wireMapDetails(relations, networkNames, kindNames);
     wireMapNodes();
   }
@@ -1108,18 +1133,25 @@
 
   function wireMapDetails(relations, names, kindNames) {
     var detail = el.doc.querySelector("#map-detail"), edges = [].slice.call(el.doc.querySelectorAll(".imap-relation"));
+    var listButtons = [].slice.call(el.doc.querySelectorAll(".map-rel-btn"));
     var locked = null;
     function title(slug) { return (names[slug] || [(registryEntry(slug) || {}).shortTitle || slug]).join(" "); }
     function clear() {
       if (locked !== null) return;
       edges.forEach(function (edge) { edge.classList.remove("is-active"); });
-      detail.innerHTML = '<p class="map-detail-prompt">Hover an arrow to see the relationship. Click an arrow to keep its legal basis and representative mechanisms visible.</p>';
+      listButtons.forEach(function (button) { button.classList.remove("is-active"); button.setAttribute("aria-pressed", "false"); });
+      detail.innerHTML = '<p class="map-detail-prompt">Select a relationship to inspect its legal basis and relevant provisions.</p>';
     }
     function show(index, shouldLock) {
       var relation = relations[index]; if (!relation) return;
       if (shouldLock && locked === index) { locked = null; clear(); return; }
       if (shouldLock) locked = index;
       edges.forEach(function (edge) { edge.classList.toggle("is-active", Number(edge.dataset.relation) === index); });
+      listButtons.forEach(function (button) {
+        var active = Number(button.dataset.relation) === index;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      });
       var bridges = (RELATIONS.interactions || []).filter(function (bridge) {
         return bridge.from === relation.from && bridge.to === relation.to;
       });
@@ -1139,6 +1171,13 @@
       edge.addEventListener("click", function () { show(index, true); });
       edge.addEventListener("keydown", function (event) {
         if (event.key === "Enter" || event.key === " ") { event.preventDefault(); show(index, true); }
+      });
+    });
+    listButtons.forEach(function (button) {
+      var index = Number(button.dataset.relation);
+      button.addEventListener("click", function () {
+        show(index, true);
+        detail.scrollIntoView({ block: "nearest", behavior: "smooth" });
       });
     });
   }
@@ -1283,7 +1322,10 @@
       });
     });
     el.doc.querySelectorAll(".chg-head").forEach(function (b) {
-      b.addEventListener("click", function () { b.parentNode.classList.toggle("is-open"); });
+      b.addEventListener("click", function () {
+        var open = b.parentNode.classList.toggle("is-open");
+        b.setAttribute("aria-expanded", open ? "true" : "false");
+      });
     });
     el.doc.querySelectorAll("[data-open]").forEach(function (b) {
       b.addEventListener("click", function (ev) {
@@ -1296,6 +1338,7 @@
       var card = el.doc.querySelector('.chg[data-id="' + cssEsc(focus) + '"]');
       if (card) {
         card.classList.add("is-open", "is-focus");
+        card.querySelector(".chg-head").setAttribute("aria-expanded", "true");
         setTimeout(function () { card.scrollIntoView({ block: "center", behavior: "smooth" }); }, 40);
       }
     }
@@ -1314,7 +1357,7 @@
 
   function changeCard(i) {
     var h = '<article class="chg" data-id="' + esc(i.id) + '" data-status="' + i.status + '">' +
-      '<button class="chg-head" type="button">' +
+      '<button class="chg-head" type="button" aria-expanded="false">' +
       '<span class="chg-badge" data-status="' + i.status + '">' +
         (i.status === "inserted" ? "added" : i.status === "removed" ? "removed" : "rewritten") + "</span>" +
       '<span class="chg-id">' + esc(i.label) + "</span>" +
@@ -2138,7 +2181,7 @@
         r: i === id ? Math.max(nodeR(i), 8) : nodeR(i), rank: keep[i]
       };
     });
-    var edges = DATA.edges.filter(function (e) { return set[e.s] && set[e.t] && edgeVisible(e); });
+    var edges = EDGES.filter(function (e) { return set[e.s] && set[e.t] && edgeVisible(e); });
     return { nodes: nodes, edges: edges };
   }
 
@@ -2199,7 +2242,7 @@
     var nodes = Object.keys(set).map(function (i) {
       return { id: i, type: N[i].type, label: shortLabel(N[i]), title: N[i].title, r: nodeR(i) };
     });
-    var edges = DATA.edges.filter(function (e) { return set[e.s] && set[e.t] && edgeVisible(e); });
+    var edges = EDGES.filter(function (e) { return set[e.s] && set[e.t] && edgeVisible(e); });
     return { nodes: nodes, edges: edges };
   }
 
@@ -2212,7 +2255,7 @@
         nodes.push({ id: n.id, type: n.type, label: shortLabel(n), title: n.title, r: nodeR(n.id) });
       });
     });
-    var edges = DATA.edges.filter(function (e) { return set[e.s] && set[e.t] && edgeVisible(e); });
+    var edges = EDGES.filter(function (e) { return set[e.s] && set[e.t] && edgeVisible(e); });
     return { nodes: nodes, edges: edges };
   }
 
@@ -2306,10 +2349,37 @@
     full.pinFocus = !!scoped;
     full.setFocus(scoped ? focus : (state.route && state.route.id));
     full.setData(g.nodes, g.edges);
+    paintGraphList(g);
+    syncOverlayView();
 
     // Grow out of the layout the reader was just looking at, rather than
     // scattering and re-solving from nothing.
     if (seed && scoped) seedFromMini();
+  }
+
+  function paintGraphList(g) {
+    var nodes = g.nodes.slice().sort(function (a, b) {
+      return TYPES.indexOf(a.type) - TYPES.indexOf(b.type) || a.label.localeCompare(b.label, undefined, { numeric: true });
+    });
+    $("#gfull-list").innerHTML = '<p class="graph-list-intro">' + nodes.length +
+      ' provisions in this view. Open a provision to inspect its outgoing links and backlinks.</p><div class="graph-list-grid">' +
+      nodes.map(function (node) {
+        return '<button class="graph-list-node" type="button" data-id="' + esc(node.id) + '">' +
+          '<span class="link-id" data-type="' + node.type + '">' + esc(node.label) + '</span>' +
+          '<span class="link-title">' + esc(node.title || node.label) + '</span></button>';
+      }).join("") + '</div>';
+  }
+
+  function syncOverlayView() {
+    var list = state.ovView === "list";
+    $("#gfull").hidden = list;
+    $("#gfull-list").hidden = !list;
+    $(".ov-hint").hidden = list;
+    $("#ov-view").querySelectorAll(".seg-btn").forEach(function (button) {
+      var on = button.dataset.view === state.ovView;
+      button.classList.toggle("is-on", on);
+      button.setAttribute("aria-pressed", on ? "true" : "false");
+    });
   }
 
   function seedFromMini() {
@@ -2326,6 +2396,8 @@
     if (moved) { full.fit(); full.kick(0.35); }
   }
 
+  var overlayReturnFocus = null;
+
   function openOverlay(focus) {
     var wasOpen = !el.overlay.hidden;
     // Expanding from a provision opens on that provision; the top-bar Graph
@@ -2338,7 +2410,11 @@
     syncOvDepth();
     if (wasOpen) { paintOverlay(true); return; }
 
+    overlayReturnFocus = document.activeElement;
     el.overlay.hidden = false;
+    $(".topbar").inert = true;
+    $(".layout").inert = true;
+    $("#btn-close").focus();
     requestAnimationFrame(function () {
       full.resize();
       paintOverlay(true);
@@ -2355,15 +2431,26 @@
   function closeOverlay(silent) {
     if (el.overlay.hidden) return;
     el.overlay.hidden = true;
+    $(".topbar").inert = false;
+    $(".layout").inert = false;
     document.removeEventListener("keydown", escClose);
     tipForNode(null);
+    if (overlayReturnFocus && overlayReturnFocus.focus) overlayReturnFocus.focus();
+    overlayReturnFocus = null;
     if (!silent && /^#\/graph(\/|$)/.test(location.hash)) {
       history.replaceState(null, "", hashOf(state.route));
     }
   }
 
   function escClose(ev) {
-    if (ev.key === "Escape") { closeOverlay(); render(); }
+    if (ev.key === "Escape") { closeOverlay(); render(); return; }
+    if (ev.key !== "Tab") return;
+    var focusable = [].slice.call(el.overlay.querySelectorAll('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'))
+      .filter(function (item) { return !item.hidden && item.offsetParent !== null; });
+    if (!focusable.length) return;
+    var first = focusable[0], last = focusable[focusable.length - 1];
+    if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+    else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
   }
 
   /* ── tooltip ──────────────────────────────────────────────── */
@@ -2584,6 +2671,19 @@
       state.ovDepth = +b.dataset.ovdepth;
       syncOvDepth();
       paintOverlay(false);
+    });
+    $("#ov-view").addEventListener("click", function (ev) {
+      var b = ev.target.closest(".seg-btn");
+      if (!b) return;
+      state.ovView = b.dataset.view;
+      syncOverlayView();
+      if (state.ovView === "list") $("#gfull-list").focus();
+    });
+    $("#gfull-list").addEventListener("click", function (ev) {
+      var b = ev.target.closest("[data-id]");
+      if (!b) return;
+      closeOverlay();
+      go(routeOf(b.dataset.id));
     });
     $("#btn-close").addEventListener("click", function () { closeOverlay(); render(); });
     $("#btn-theme").addEventListener("click", toggleTheme);
