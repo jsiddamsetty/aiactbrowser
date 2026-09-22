@@ -446,9 +446,14 @@ def parse_events(body_lines):
         # continuation does not become an orphaned body paragraph.
         if pending_h3:
             heading, heading_x = pending_h3
-            if line.bold_frac > 0.6 and line.x0 > heading_x + 5:
-                events.append(("h3", norm_text(heading + " " + plain)))
-                pending_h3 = None
+            # Some wrapped heading continuations lose their bold font metadata
+            # in the PDF text stream.  They remain indented and begin with a
+            # lower-case word, unlike a new body paragraph.
+            continuation = line.bold_frac > 0.6 or re.match(r"^[a-z]", plain)
+            if continuation and line.x0 > heading_x + 5:
+                # A heading can span more than two visual lines.  Keep it
+                # pending until the next non-continuation block is seen.
+                pending_h3 = (norm_text(heading + " " + plain), heading_x)
                 continue
             flush()
 
@@ -503,7 +508,10 @@ def parse_events(body_lines):
             events.append(("point", m.group(1), m.group(2)))
             continue
         if MINOR.match(plain) and line.x0 < margin + 45:
-            events.append(("h3", plain))
+            # Like lettered sub-headings, roman sub-headings may wrap.
+            # Hold the first visual line so an indented continuation can be
+            # rejoined above before it is emitted.
+            pending_h3 = (plain, line.x0)
             continue
         if EXAMPLE.match(re.sub("^[%s]\\d+[%s]" % (SUP_O, SUP_C), "", text)) \
                 and margin + 6 < line.x0 < margin + 22:
