@@ -682,7 +682,9 @@
     var m = DATA.meta, c = m.counts;
     var h = '<div class="home-hero">' +
       '<p class="home-eyebrow">' + esc(m.source) + "</p>" +
-      "<h1>The EU AI Act</h1>" + checkedOn() + "</div>";
+      "<h1>The EU AI Act</h1>" +
+      "<p>AI Act Browser is a research interface for navigating the EU AI Act in a financial-services context, alongside DORA, GDPR, MaRisk, BaFin guidance on ICT risks in AI, and related implementing rules. Search the text, follow citations and definitions, and trace how individual provisions connect across the regulatory framework.</p>" +
+      checkedOn() + "</div>";
 
     h += '<a class="banner" href="#/changes">' +
       '<span class="banner-tag">In force ' + esc(m.inForce) + "</span>" +
