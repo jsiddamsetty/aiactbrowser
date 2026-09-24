@@ -66,6 +66,20 @@ def node_body(node):
     return markup
 
 
+def source_url(document, node=None):
+    if node and node.get("type") == "guidance":
+        for guide in document.get("guidanceDocs", []):
+            if guide.get("slug") == node.get("doc"):
+                return guide.get("sourceUrl", "")
+    return document.get("meta", {}).get("sourceUrl", "")
+
+
+def source_link(url):
+    if not url:
+        return ""
+    return '<p class="agent-source"><a href="%s" target="_blank" rel="noopener">Official source ↗</a></p>' % html.escape(url, quote=True)
+
+
 def write(relpath, contents, written):
     path = ROOT / relpath
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -105,6 +119,7 @@ def corpus_page(slug, document, written):
         lists.append("<h2>%s</h2><ul class=\"agent-list\">%s</ul>" % (html.escape(label), items))
     body = '<p class="agent-kicker">%s</p><h1>%s</h1><p class="agent-summary">%s</p>' % (
         html.escape(meta.get("bindingLevel") or "Legal text"), html.escape(title), html.escape(summary))
+    body += source_link(source_url(document))
     body += "".join(lists)
     write(Path(slug) / "index.html", page(title, body, summary), written)
 
@@ -117,9 +132,10 @@ def corpus_page(slug, document, written):
         if following:
             links += ' · <a href="%s">Next</a>' % node_route(following["id"])
         node_title_text = node_title(node)
-        body = '<p class="agent-kicker">%s</p><h1>%s</h1><p class="agent-meta">%s</p><nav class="agent-nav">%s</nav><article class="agent-body">%s</article>' % (
+        body = '<p class="agent-kicker">%s</p><h1>%s</h1><p class="agent-meta">%s</p><nav class="agent-nav">%s</nav>%s<article class="agent-body">%s</article>' % (
             html.escape(node.get("type", "provision").replace("_", " ")),
-            html.escape(node_title_text), html.escape(node.get("title") or ""), links, node_body(node))
+            html.escape(node_title_text), html.escape(node.get("title") or ""), links,
+            source_link(source_url(document, node)), node_body(node))
         route = node_route(node["id"]).lstrip("/")
         write(Path(route + ".html"), page(node_title_text, body, node.get("text", "")[:180]), written)
 

@@ -1406,6 +1406,18 @@
 
   function cssEsc(s) { return String(s).replace(/["\\]/g, "\\$&"); }
 
+  function sourceUrlForNode(n, corpus) {
+    if (n.type === "guidance") {
+      var guide = guidanceDoc(n.doc);
+      return guide && guide.sourceUrl;
+    }
+    if (corpus === "aia") return (DATA.meta || {}).sourceUrl;
+    if (corpus === "gdpr") return (DATA.gdprMeta || {}).sourceUrl;
+    if (corpus === "kimig") return (DATA.kimigMeta || {}).sourceUrl;
+    return ((CORPUS_DOCS[corpus] || {}).meta || {}).sourceUrl ||
+      (registryEntry(corpus) || {}).sourceUrl;
+  }
+
   function renderNode(n, para) {
     var h = "";
     var corpus = n.corpus || (n.id.indexOf(":") > 0 ? n.id.split(":", 1)[0] : "aia");
@@ -1500,6 +1512,11 @@
     } else {
       h += '<h1 class="doc-title">' + esc(n.title || n.label) + "</h1>";
       if (n.type !== "recital") h += '<p class="doc-num">' + esc(n.label) + "</p>";
+    }
+
+    var sourceUrl = sourceUrlForNode(n, corpus);
+    if (sourceUrl && n.type !== "external") {
+      h += '<p><a class="btn" href="' + esc(sourceUrl) + '" target="_blank" rel="noopener">Official source ↗</a></p>';
     }
 
     /* the text */
