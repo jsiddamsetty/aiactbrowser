@@ -16,7 +16,7 @@ META = {
     "title": "Mindestanforderungen an das Risikomanagement — MaRisk",
     "cite": "BaFin Circular 06/2026 (BA)", "version": "30 June 2026",
     "inForce": "30 June 2026", "language": "de",
-    "sourceUrl": "https://www.bafin.de/SharedDocs/Veroeffentlichungen/DE/Rundschreiben/2026/rs_06_2026_MaRisk_BA.html",
+    "sourceUrl": "https://www.bundesbank.de/de/aufgaben/finanzaufsicht/einzelaspekte/risikomanagement/marisk/marisk-799522",
 }
 
 MODULE_RE = re.compile(r"^(AT|BT|BTO|BTR)(?:\s+(\d+(?:\.\d+)*))?\s+(.+?)\s+(\d+)\s*$")

@@ -51,7 +51,7 @@ META = {
     "adopted": "22 July 2026",
     "inForce": "29 July 2026",
     "language": "de",
-    "sourceUrl": "https://www.gesetze-im-internet.de/ki-mig/",
+    "sourceUrl": "https://www.gesetze-im-internet.de/ki-mig/BJNR0DF0B0026.html",
 }
 
 # The § 15 fines bite on the Act as first published, not as amended in 2026.

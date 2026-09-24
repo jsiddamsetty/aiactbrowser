@@ -684,6 +684,7 @@
       '<p class="home-eyebrow">' + esc(m.source) + "</p>" +
       "<h1>The EU AI Act</h1>" +
       "<p>AI Act Browser is a research interface for navigating the EU AI Act in a financial-services context, alongside DORA, GDPR, MaRisk, BaFin guidance on ICT risks in AI, and related implementing rules. Search the text, follow citations and definitions, and trace how individual provisions connect across the regulatory framework.</p>" +
+      (m.sourceUrl ? '<p><a class="btn" href="' + esc(m.sourceUrl) + '" target="_blank" rel="noopener">Official source ↗</a></p>' : "") +
       checkedOn() + "</div>";
 
     h += '<a class="banner" href="#/changes">' +
@@ -879,6 +880,7 @@
     var h = '<nav class="crumb"><a href="#/">The portal</a><i>›</i><span>' + esc(entry.shortTitle || slug) + '</span></nav>' +
       '<p class="home-eyebrow">Fintech AI lens</p><h1 class="doc-title">' + esc(title) + '</h1>' +
       '<p class="dora-ai-scope">' + esc(lens.scope || "Curated DORA requirements for AI used by financial entities.") + '</p>' +
+      (entry.sourceUrl ? '<p><a class="btn" href="' + esc(entry.sourceUrl) + '" target="_blank" rel="noopener">Official source ↗</a></p>' : "") +
       '<aside class="dora-ai-caveat"><b>How to read this</b><span>' + esc(lens.caveat || "Applicability depends on the entity and its use of the system.") + '</span></aside>' +
       '<div class="block dora-ai-block"><div class="block-head"><h2>What matters for an AI use case</h2><span class="block-count">' + cards.length + '</span></div>' +
       '<div class="dora-ai-cards">' + cards.map(function (card) {
@@ -900,7 +902,8 @@
       '<h1 class="doc-title">' + esc(d.title) + "</h1>" +
       '<p class="doc-num">' + secs.length + " sections" +
       (paras > 0 ? " · paras (1)–(" + paras + ")" : "") + "</p>" +
-      guidanceNote(d);
+      guidanceNote(d) +
+      (d.sourceUrl ? '<p><a class="btn" href="' + esc(d.sourceUrl) + '" target="_blank" rel="noopener">Official source ↗</a></p>' : "");
 
     var parts = [];
     secs.forEach(function (g) {

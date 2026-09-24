@@ -48,7 +48,7 @@ META = {
     "adopted": "27 April 2016",
     "applies": "25 May 2018",
     "corrigendum": "OJ L 127, 23.5.2018, p. 2",
-    "sourceUrl": "https://eur-lex.europa.eu/eli/reg/2016/679/2016-05-04/eng",
+    "sourceUrl": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A02016R0679-20160504",
 }
 
 # How parse_consolidated marks a block that a ▼ marker governs.

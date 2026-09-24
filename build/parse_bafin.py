@@ -48,6 +48,7 @@ DOC = {
     "title": "Guidance on ICT Risks in the Use of AI at Financial Entities",
     "cite": "BaFin · version of 23 January 2026 · English version",
     "draft": False,
+    "sourceUrl": "https://www.bafin.de/SharedDocs/Downloads/EN/Anlage/dl_Anlage_orientierungshilfe_IKT_Risiken_bei_KI_en.html?nn=161628",
 }
 
 # After the cover and contents (1–3); before the imprint and the index of

@@ -304,7 +304,7 @@ def main():
             "version": "consolidated",
             "inForce": IN_FORCE,
             "source": "Consolidated text, EUR-Lex, in force from " + IN_FORCE,
-            "sourceUrl": "https://eur-lex.europa.eu/eli/reg/2024/1689/2026-07-27/eng",
+            "sourceUrl": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A02024R1689-20260727",
             "originalUrl": "https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng",
             "amendedBy": AMENDER,
             "counts": {
