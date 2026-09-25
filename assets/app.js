@@ -564,7 +564,10 @@
       h = chapterToc(DATA.chapters, DATA.articles);
     } else if (tocDoc === "gdpr") {
       h = chapterToc(DATA.gdprChapters, DATA.gdpr);
-    } else if (CORPUS_DOCS[tocDoc] && CORPUS_DOCS[tocDoc].articles) {
+    // The AI Act has its own tabs below. Keep its article collection out of
+    // this generic branch, otherwise Recitals, Annexes and Terms are all
+    // rendered as the article contents list.
+    } else if (tocDoc !== "aia" && CORPUS_DOCS[tocDoc] && CORPUS_DOCS[tocDoc].articles) {
       h = chapterToc(CORPUS_DOCS[tocDoc].chapters || [], CORPUS_DOCS[tocDoc].articles || []);
     } else if (tocDoc === "aia" && tocTab === "recitals") {
       DATA.recitals.forEach(function (r) {
