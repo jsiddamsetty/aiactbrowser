@@ -2167,3 +2167,9 @@ h1.doc-title {
   text-decoration-color: currentColor;
 }
 .doc-facts .source-link { font-size: inherit; }
+
+/* The connection rail is now on demand, so large screens can give the legal
+   text a broader working measure without turning it into a full-width wall. */
+@media (min-width: 1281px) {
+  .doc { max-width: 96ch; }
+}
