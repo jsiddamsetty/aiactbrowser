@@ -91,7 +91,11 @@
   });
 
   function json(url) {
-    return fetch(url).then(function (r) { if (!r.ok) throw new Error(url + ": HTTP " + r.status); return r.json(); });
+    var sep = url.indexOf("?") >= 0 ? "&" : "?";
+    return fetch(url + sep + "v=20260925-2").then(function (r) {
+      if (!r.ok) throw new Error(url + ": HTTP " + r.status);
+      return r.json();
+    });
   }
 
   function start(data) {
@@ -1350,7 +1354,7 @@
   function sourceUrlForNode(n, corpus) {
     if (n.type === "guidance") {
       var guide = guidanceDoc(n.doc);
-      return guide && guide.sourceUrl;
+      if (guide && guide.sourceUrl) return guide.sourceUrl;
     }
     if (corpus === "aia") return (DATA.meta || {}).sourceUrl;
     if (corpus === "gdpr") return (DATA.gdprMeta || {}).sourceUrl;
