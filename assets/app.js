@@ -320,6 +320,7 @@
     closeRails();
     document.body.classList.toggle("portal-wide", r.kind === "map" || r.kind === "changes");
     document.body.classList.toggle("changes-wide", r.kind === "changes");
+    el.doc.classList.toggle("is-home", r.kind === "home");
     syncPrimaryNav(r.kind);
 
     if (r.kind === "map") {
@@ -330,7 +331,7 @@
       renderGraphFor(null);
       el.conn.innerHTML = "";
       markToc(null);
-      document.title = "What changed in 2026 — AI Act Browser";
+      document.title = "Omnibus Changes — AI Act Browser";
     } else if (r.kind === "home") {
       renderHome();
       renderGraphFor(null);
@@ -683,97 +684,22 @@
 
   function renderHome() {
     var m = DATA.meta, c = m.counts;
-    var h = '<div class="home-hero">' +
+    var h = '<div class="home-hero home-act"><div class="home-intro">' +
       '<p class="home-eyebrow">' + esc(m.source) + "</p>" +
       "<h1>The EU AI Act</h1>" +
       "<p>AI Act Browser is a research interface for navigating the EU AI Act in a financial-services context, alongside DORA, GDPR, MaRisk, BaFin guidance on ICT risks in AI, and related implementing rules. Search the text, follow citations and definitions, and trace how individual provisions connect across the regulatory framework.</p>" +
-      (m.sourceUrl ? '<p><a class="btn" href="' + esc(m.sourceUrl) + '" target="_blank" rel="noopener">Official source ↗</a></p>' : "") +
-      checkedOn() + "</div>";
+      sourceLine(m.sourceUrl) +
+      '</div><aside class="home-apparatus" aria-label="Legal relationship map">' +
+      '<a class="home-map-launch" href="#/map">' +
+      '<span class="home-map-label">Legal relationship map</span>' +
+      '<span class="home-map-copy">Trace how the AI Act connects with GDPR, DORA, KI-MIG and supervisory guidance.</span>' +
+      '<span class="home-map-go">Open the map</span></a>' + checkedOn() + '</aside></div>';
 
     h += '<a class="banner" href="#/changes">' +
-      '<span class="banner-tag">In force ' + esc(m.inForce) + "</span>" +
-      "<span class="+'"banner-text"'+">Amended by the " + esc(m.amendedBy.short) + ": <b>" +
-      c.changed + " provisions</b> added or rewritten.</span>" +
-      '<span class="banner-go">See what changed →</span></a>';
-
-    h += '<div class="portal-actions"><a class="portal-card" href="#/map"><b>Legal relationship map</b><span>Connections between the AI Act, GDPR, DORA, KI-MIG and supervisory guidance →</span></a></div>';
-
-    /* the GDPR, which the Act defines its data terms by */
-    if (DATA.gdpr && DATA.gdpr.length) {
-      var gm = DATA.gdprMeta || {};
-      var reached = DATA.gdpr.filter(function (a) { return citedFromAct(a).length; }).length;
-      h += '<div class="block"><div class="block-head"><h2>Related regulation</h2>' +
-        '<span class="block-count">' + DATA.gdpr.length + "</span>" +
-        '<span class="block-note">linked wherever the Act cites it</span></div>' +
-        '<div class="gcards">' +
-        '<button class="gcard" type="button" data-kind="gdpr" data-route="#/gdpr">' +
-        '<span class="gcard-top"><span class="gcard-name">' + esc(gm.abbr) + "</span>" +
-        '<span class="gdoc-badge" data-draft="0">applies ' + esc(gm.applies) + "</span></span>" +
-        '<span class="gcard-title">' + esc(gm.title) + "</span>" +
-        '<span class="gcard-sub">' + esc(gm.cite) + " · " + DATA.gdpr.length + " articles · " +
-        reached + " cited by the Act and its guidance</span>" +
-        "</button></div></div>";
-    }
-
-    /* the Commission's own reading of Articles 5 and 6, section by section */
-    var commission = (DATA.guidanceDocs || []).filter(function (d) { return d.authority !== "BaFin"; });
-    var commissionSecs = (DATA.guidance || []).filter(function (g) {
-      return commission.some(function (d) { return d.slug === g.doc; });
-    });
-    if (commissionSecs.length) {
-      h += '<div class="block"><div class="block-head"><h2>Commission guidance</h2>' +
-        '<span class="block-count">' + commissionSecs.length + "</span></div>" +
-        '<div class="gcards">';
-      commission.forEach(function (d) {
-        var secs = DATA.guidance.filter(function (g) { return g.doc === d.slug; });
-        h += '<button class="gcard" type="button" data-route="' + docRoute("gdl-" + d.slug) + '">' +
-          '<span class="gcard-top"><span class="gcard-name">' + esc(d.name) + "</span>" +
-          '<span class="gdoc-badge" data-draft="' + (d.draft ? "1" : "0") + '">' +
-          (d.draft ? "draft" : "adopted") + "</span></span>" +
-          '<span class="gcard-title">' + esc(d.title) + "</span>" +
-          '<span class="gcard-sub">' + esc(d.cite) + " · " + secs.length + " sections</span>" +
-          "</button>";
-      });
-      h += "</div></div>";
-    }
-
-    /* supervisory guidance: BaFin on DORA and AI, related to the Act editorially */
-    (DATA.guidanceDocs || []).filter(function (d) { return d.authority === "BaFin"; }).forEach(function (d) {
-      var secs = DATA.guidance.filter(function (g) { return g.doc === d.slug; });
-      var related = reach(secs, { concords: 1 }).length;
-      h += '<div class="block"><div class="block-head"><h2>Supervisory guidance</h2>' +
-        '<span class="block-count">' + secs.length + "</span>" +
-        '<span class="block-note">related to the Act’s requirements, editorially</span></div>' +
-        '<div class="gcards">' +
-        '<button class="gcard" type="button" data-route="' + docRoute("gdl-" + d.slug) + '">' +
-        '<span class="gcard-top"><span class="gcard-name">' + esc(d.short) + " · Germany</span>" +
-        '<span class="gdoc-badge" data-draft="0">non-binding</span></span>' +
-        '<span class="gcard-title">' + esc(d.title) + "</span>" +
-        '<span class="gcard-sub">' + esc(d.cite) + " · " + secs.length + " sections · related to " +
-        related + " requirements of the Act</span>" +
-        "</button></div></div>";
-    });
-
-    /* the German implementing law, cited into the Act provision by provision */
-    if (DATA.kimig && DATA.kimig.length) {
-      var km = DATA.kimigMeta || {};
-      var cited = {};
-      DATA.kimig.forEach(function (s) {
-        OUT[s.id].forEach(function (e) { if (corpusOf(N[e.t]) === "aia") cited[e.t] = 1; });
-      });
-      h += '<div class="block"><div class="block-head"><h2>National implementation</h2>' +
-        '<span class="block-count">' + DATA.kimig.length + "</span>" +
-        '<span class="block-note">linked to the provisions it cites</span></div>' +
-        '<div class="gcards">' +
-        '<button class="gcard" type="button" data-kind="kimig" data-route="#/kimig">' +
-        '<span class="gcard-top"><span class="gcard-name">' + esc(km.abbr) + " · Germany</span>" +
-        '<span class="gdoc-badge" data-draft="0">in force ' + esc(km.inForce) + "</span></span>" +
-        '<span class="gcard-title">' + esc(km.titleEn || km.title) + "</span>" +
-        '<span class="gcard-sub">' + esc(km.cite) + " · " + DATA.kimig.length + " sections · cites " +
-        Object.keys(cited).length + " provisions of the Act" +
-        (km.translation ? " · in English, with the German original" : "") + "</span>" +
-        "</button></div></div>";
-    }
+      '<span class="banner-tag">In force from ' + esc(m.inForce) + "</span>" +
+      "<span class="+'"banner-text"'+">The " + esc(m.amendedBy.short) + " changes <b>" +
+      c.changed + " provisions</b>.</span>" +
+      '<span class="banner-go">Read the amendments</span></a>';
 
     h += '<div class="block"><div class="block-head"><h2>Chapters</h2></div><div class="chapgrid">';
     DATA.chapters.forEach(function (ch) {
@@ -784,6 +710,10 @@
         '<span class="chapcard-c">' + n.length + (n.length === 1 ? " art." : " arts.") + "</span></button>";
     });
     h += "</div></div>";
+    h += '<nav class="home-browse" aria-label="Related material">' +
+      '<span>Related material</span>' +
+      '<a href="#/aia/guidance/pp">Commission guidance</a>' +
+      '</nav>';
 
     el.doc.innerHTML = h;
     wireHome();
@@ -856,13 +786,13 @@
     if (["marisk", "dora", "dora-rts-rmf"].indexOf(slug) >= 0) return doraAiHome(slug);
     var doc = CORPUS_DOCS[slug] || {}, meta = doc.meta || {}, entry = registryEntry(slug) || {};
     var nodes = (doc.articles || doc.guidance || doc.modules || []);
-    var h = '<nav class="crumb"><a href="#/">The portal</a><i>›</i><span>' + esc(entry.shortTitle || meta.shortTitle || slug) + '</span></nav>' +
+    var h = '<nav class="crumb"><a href="#/">Home</a><i>›</i><span>' + esc(entry.shortTitle || meta.shortTitle || slug) + '</span></nav>' +
       '<span class="kicker" data-type="' + (nodes[0] ? nodes[0].type : "article") + '">' + esc(entry.bindingLevel || "Document") + '</span>' +
       '<h1 class="doc-title">' + esc(meta.title || entry.title || slug) + '</h1>' +
       '<p class="doc-num">' + esc(meta.cite || meta.celex || entry.citation || "") + '</p>' +
       '<ul class="doc-facts"><li><b>' + nodes.length + '</b> provisions</li>' +
       (meta.inForce ? '<li>In force <b>' + esc(meta.inForce) + '</b></li>' : '') +
-      (meta.sourceUrl ? '<li><a href="' + esc(meta.sourceUrl) + '" target="_blank" rel="noopener">Official source ↗</a></li>' : '') + '</ul>';
+      (meta.sourceUrl ? '<li>' + sourceLink(meta.sourceUrl) + '</li>' : '') + '</ul>';
     if (doc.chapters && doc.articles) {
       var parts = doc.chapters.map(function (c) {
         var arts = doc.articles.filter(function (a) { return a.chapter === c.roman; });
@@ -880,10 +810,10 @@
     var lens = RELATIONS.doraAiLens || {}, entry = registryEntry(slug) || {};
     var cards = (lens.cards || []).filter(function (card) { return card.corpora.indexOf(slug) >= 0; });
     var title = slug === "dora" ? (lens.title || "DORA for fintech AI") : (entry.shortTitle || slug) + " for fintech AI";
-    var h = '<nav class="crumb"><a href="#/">The portal</a><i>›</i><span>' + esc(entry.shortTitle || slug) + '</span></nav>' +
+    var h = '<nav class="crumb"><a href="#/">Home</a><i>›</i><span>' + esc(entry.shortTitle || slug) + '</span></nav>' +
       '<p class="home-eyebrow">Fintech AI lens</p><h1 class="doc-title">' + esc(title) + '</h1>' +
       '<p class="dora-ai-scope">' + esc(lens.scope || "Curated DORA requirements for AI used by financial entities.") + '</p>' +
-      (entry.sourceUrl ? '<p><a class="btn" href="' + esc(entry.sourceUrl) + '" target="_blank" rel="noopener">Official source ↗</a></p>' : "") +
+      sourceLine(entry.sourceUrl) +
       '<aside class="dora-ai-caveat"><b>How to read this</b><span>' + esc(lens.caveat || "Applicability depends on the entity and its use of the system.") + '</span></aside>' +
       '<div class="block dora-ai-block"><div class="block-head"><h2>What matters for an AI use case</h2><span class="block-count">' + cards.length + '</span></div>' +
       '<div class="dora-ai-cards">' + cards.map(function (card) {
@@ -898,7 +828,7 @@
     var paras = Math.max.apply(null, secs.map(function (g) { return g.paras ? g.paras[1] : 0; }));
 
     // The note below names the citation and status, so this line doesn't.
-    var h = '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>Guidance</span>' +
+    var h = '<nav class="crumb"><a href="#/aia">EU AI Act</a><i>›</i><span>Guidance</span>' +
       "<i>›</i><span>" + esc(d.name) + "</span></nav>" +
       '<span class="kicker" data-type="guidance">' +
         (d.authority === "BaFin" ? "Supervisory guidance" : "Commission guidance") + "</span>" +
@@ -906,7 +836,7 @@
       '<p class="doc-num">' + secs.length + " sections" +
       (paras > 0 ? " · paras (1)–(" + paras + ")" : "") + "</p>" +
       guidanceNote(d) +
-      (d.sourceUrl ? '<p><a class="btn" href="' + esc(d.sourceUrl) + '" target="_blank" rel="noopener">Official source ↗</a></p>' : "");
+      sourceLine(d.sourceUrl);
 
     var parts = [];
     secs.forEach(function (g) {
@@ -944,7 +874,7 @@
   function kimigHome() {
     var km = DATA.kimigMeta || {}, de = kimigLang === "de";
 
-    var h = '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>' +
+    var h = '<nav class="crumb"><a href="#/">Home</a><i>›</i><span>' +
       esc(km.abbr || "KI-MIG") + "</span></nav>" +
       '<span class="kicker" data-type="kimig">German implementing law</span>' +
       '<h1 class="doc-title"' + (de ? ' lang="de"' : "") + ">" +
@@ -960,8 +890,7 @@
       (km.inForce ? "<li>In force <b>" + esc(km.inForce) + "</b></li>" : "") +
       "<li><b>" + DATA.kimig.length + "</b> sections</li>" +
       (km.translation ? "<li>English (translation) · Deutsch (original text) on every section</li>" : "") +
-      (km.sourceUrl ? '<li><a href="' + esc(km.sourceUrl) + '" target="_blank" rel="noopener">' +
-        "gesetze-im-internet.de ↗</a></li>" : "") +
+      (km.sourceUrl ? '<li>' + sourceLink(km.sourceUrl) + '</li>' : "") +
       "</ul>";
 
     var parts = (DATA.kimigParts || []).map(function (p) {
@@ -987,7 +916,7 @@
   function gdprHome() {
     var gm = DATA.gdprMeta || {};
 
-    var h = '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>' + esc(gm.abbr) + "</span></nav>" +
+    var h = '<nav class="crumb"><a href="#/">Home</a><i>›</i><span>' + esc(gm.abbr) + "</span></nav>" +
       '<span class="kicker" data-type="gdpr">Related regulation</span>' +
       '<h1 class="doc-title">' + esc(gm.title) + "</h1>" +
       '<p class="doc-num">' + esc(gm.abbr) + " · " + esc(gm.cite) + " · " + esc(gm.oj) + "</p>" +
@@ -998,7 +927,7 @@
       "<li>Applies from <b>" + esc(gm.applies) + "</b></li>" +
       "<li><b>" + DATA.gdpr.length + "</b> articles</li>" +
       "<li>As corrected, " + esc(gm.corrigendum) + "</li>" +
-      '<li><a href="' + esc(gm.sourceUrl) + '" target="_blank" rel="noopener">EUR-Lex ↗</a></li>' +
+      '<li>' + sourceLink(gm.sourceUrl) + '</li>' +
       "</ul>";
 
     var parts = (DATA.gdprChapters || []).map(function (c) {
@@ -1281,7 +1210,7 @@
 
     var h = '<div class="home-hero">' +
       '<p class="home-eyebrow">' + esc(a.title) + " · applies from " + esc(m.inForce) + "</p>" +
-      "<h1>What the Digital Omnibus changed.</h1>" +
+      "<h1>Omnibus Changes</h1>" +
       "<p>" + esc(a.title) + " — the " + esc(a.short) + " of " + esc(a.date) +
       " — rewrote " + c.amended + " provisions of the AI Act and added " + c.inserted +
       ". Every change below is EUR-Lex's own annotation of the consolidated text, " +
@@ -1409,6 +1338,15 @@
 
   function cssEsc(s) { return String(s).replace(/["\\]/g, "\\$&"); }
 
+  function sourceLink(url, label) {
+    return '<a class="source-link" href="' + esc(url) + '" target="_blank" rel="noopener">' +
+      esc(label || "Official source") + ' <span aria-hidden="true">↗</span></a>';
+  }
+
+  function sourceLine(url, label) {
+    return url ? '<p class="source-line">' + sourceLink(url, label) + "</p>" : "";
+  }
+
   function sourceUrlForNode(n, corpus) {
     if (n.type === "guidance") {
       var guide = guidanceDoc(n.doc);
@@ -1425,33 +1363,32 @@
     var h = "";
     var corpus = n.corpus || (n.id.indexOf(":") > 0 ? n.id.split(":", 1)[0] : "aia");
     var corpusEntry = registryEntry(corpus) || {};
+    var corpusHome = corpus === "aia" ? "EU AI Act" : (corpusEntry.shortTitle || corpus);
 
     /* breadcrumb */
     if (n.type === "article") {
-      h += '<nav class="crumb"><a href="#/">The portal</a><i>›</i>' +
-        (corpus !== "aia" ? '<a href="#/' + esc(corpus) + '">' + esc(corpusEntry.shortTitle || corpus) + '</a><i>›</i>' : '') +
+      h += '<nav class="crumb"><a href="' + docRoute(corpus) + '">' + esc(corpusHome) + '</a><i>›</i>' +
         "<span>" + esc(n.chapterLabel) + ": " + esc(n.chapterTitle) + "</span>";
       if (n.sectionLabel) h += "<i>›</i><span>" + esc(n.sectionLabel) + ": " + esc(n.sectionTitle) + "</span>";
       h += "</nav>";
     } else if (n.type === "guidance") {
-      h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>Guidance</span>' +
+      h += '<nav class="crumb"><a href="#/aia">EU AI Act</a><i>›</i><span>Guidance</span>' +
         '<i>›</i><a href="' + (corpus === "aia" ? docRoute("gdl-" + n.doc) : "#/" + corpus) + '">' + esc(n.docName) + "</a>" +
         "<i>›</i><span>" + esc(n.part) + "</span></nav>";
     } else if (n.type === "kimig") {
-      h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i><a href="#/kimig">' +
-        esc((DATA.kimigMeta || {}).abbr || "KI-MIG") + "</a>" +
+      h += '<nav class="crumb"><a href="#/kimig">' + esc((DATA.kimigMeta || {}).abbr || "KI-MIG") + "</a>" +
         "<i>›</i><span>" + esc(kField(n, "part") + ": " + kField(n, "partTitle")) + "</span>" +
         (n.sub ? "<i>›</i><span>" + esc(kField(n, "sub") + ": " + kField(n, "subTitle")) + "</span>" : "") +
         "</nav>";
     } else if (n.type === "gdpr") {
-      h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i><a href="#/gdpr">GDPR</a>' +
+      h += '<nav class="crumb"><a href="#/gdpr">GDPR</a>' +
         "<i>›</i><span>" + esc(n.chapterLabel) + ": " + esc(n.chapterTitle) + "</span>" +
         (n.sectionLabel ? "<i>›</i><span>" + esc(n.sectionLabel) + ": " + esc(n.sectionTitle) + "</span>" : "") +
         "</nav>";
     } else if (n.type === "module") {
-      h += '<nav class="crumb"><a href="#/">The portal</a><i>›</i><a href="#/marisk">MaRisk</a></nav>';
+      h += '<nav class="crumb"><a href="#/marisk">MaRisk</a></nav>';
     } else {
-      h += '<nav class="crumb"><a href="#/">The Act</a><i>›</i><span>' +
+      h += '<nav class="crumb"><a href="#/aia">EU AI Act</a><i>›</i><span>' +
         esc(TYPE_LABEL[n.type]) + "</span></nav>";
     }
 
@@ -1511,16 +1448,14 @@
       h += '<h1 class="doc-title">' + esc(n.title) + '</h1><p class="doc-num">MaRisk ' + esc(n.key) + ' · page ' + esc(n.page) + '</p>';
     } else if (n.type === "external") {
       h += '<h1 class="doc-title">' + esc(n.label) + '</h1>' +
-        (n.externalUrl ? '<p><a class="btn" href="' + esc(n.externalUrl) + '" target="_blank" rel="noopener">Open official source ↗</a></p>' : '');
+        sourceLine(n.externalUrl, "Open official source");
     } else {
       h += '<h1 class="doc-title">' + esc(n.title || n.label) + "</h1>";
       if (n.type !== "recital") h += '<p class="doc-num">' + esc(n.label) + "</p>";
     }
 
     var sourceUrl = sourceUrlForNode(n, corpus);
-    if (sourceUrl && n.type !== "external") {
-      h += '<p><a class="btn" href="' + esc(sourceUrl) + '" target="_blank" rel="noopener">Official source ↗</a></p>';
-    }
+    if (sourceUrl && n.type !== "external") h += sourceLine(sourceUrl);
 
     /* the text */
     h += '<div class="lawtext" id="lawtext"' + (inGerman(n) ? ' lang="de"' : "") + ">" +
