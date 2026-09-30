@@ -20,6 +20,18 @@ body.agent-page, #agent-home { margin:0; color:var(--agent-ink); background:var(
 .agent-body .point { display:flex; gap:12px; margin:0 0 10px 28px; }
 .agent-body .point-marker { flex:none; }
 .agent-body .point-body { min-width:0; }
+.agent-body .gl-ex { margin:14px 0; padding:12px 14px; border-left:3px solid var(--agent-accent); background:#f2f2ee; }
+.agent-body .gl-ex::before { content:"Example"; display:block; margin-bottom:5px; color:var(--agent-muted); font:700 12px/1.3 system-ui,-apple-system,sans-serif; }
+.agent-body .gl-ex .doc-p { margin:0; }
+.agent-body .gl-roman { margin:12px 0 18px; padding-left:30px; list-style-type:lower-roman; }
+.agent-body .gl-roman li { padding-left:8px; margin-bottom:12px; }
+.agent-body .gl-table-wrap { overflow-x:auto; margin:18px 0; border:1px solid var(--agent-rule); }
+.agent-body .gl-table { width:100%; min-width:720px; border-collapse:collapse; font:13px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+.agent-body .gl-table th, .agent-body .gl-table td { padding:10px 12px; border:1px solid var(--agent-rule); text-align:left; vertical-align:top; }
+.agent-body .gl-table th { background:#f2f2ee; }
+.agent-body .gl-table td:first-child { white-space:nowrap; }
+.agent-body .gl-footnotes { margin:24px 0 0; padding:12px 0 0 28px; border-top:1px solid var(--agent-rule); color:var(--agent-muted); font:11.5px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+.agent-body .gl-footnotes li { padding-left:4px; margin:0 0 7px; }
 .agent-footer { margin-top:42px; padding-top:16px; border-top:1px solid var(--agent-rule); color:var(--agent-muted); font-size:13px; }
 .agent-card { display:block; margin:10px 0; padding:15px 17px; border:1px solid var(--agent-rule); border-radius:8px; background:var(--agent-panel); color:inherit !important; text-decoration:none; }
 .agent-card strong { display:block; color:var(--agent-ink); }

@@ -127,6 +127,8 @@ PART_RULES = {
         ("", "Approach & horizontal issues"),
     ],
     "tr": [
+        ("1", "Background & objectives"),
+        ("2", "Overview & horizontal topics"),
         ("3", "Interactive systems · 50(1)"),
         ("4", "Synthetic content · 50(2)"),
         ("5", "Emotion & biometrics · 50(3)"),
@@ -138,9 +140,17 @@ PART_RULES = {
 }
 
 
-def part_of(slug, sec):
+def part_key_of(slug, sec):
     for pref, name in PART_RULES[slug]:
         if not pref or sec == pref or sec.startswith(pref + "."):
+            return pref
+    return ""
+
+
+def part_of(slug, sec):
+    key = part_key_of(slug, sec)
+    for pref, name in PART_RULES[slug]:
+        if pref == key:
             return name
     return ""
 
@@ -422,12 +432,25 @@ HEAD_DECN = re.compile(r"^(\d{1,2}(?:\.\d{1,2}){1,3})\.?\s*([A-Z‘'\"(].*)$")
 HEAD_LETTER = re.compile(r"^([a-e])\)\s+(.+)$")
 PARA = re.compile(r"^\((\d{1,3})\)\s*(.*)$")
 POINT = re.compile(r"^\(([a-z]{1,4})\)\s*(.*)$")
-DASH = re.compile(r"^(?:[–—•]\s*|-\s+)(.+)$")
+DASH = re.compile(r"^(?:[–—•]\s*|-\s+|-(?=[A-Z]))(.+)$")
 MINOR = re.compile(r"^[ivx]{1,4}\.\s+[A-Z].{4,}$")   # "iii. The scope of …"
-EXAMPLE = re.compile(r"^(Examples?\s*:|For example\b|Practical examples?\b)")
+EXAMPLE = re.compile(r"^(Examples?\b|For example\b|Practical examples?\b)")
+TRANSPARENCY_ROMAN_PARAS = {56, 87, 112, 113, 130, 131}
 
 
-def parse_events(body_lines):
+def strip_dash(t):
+    """Remove a list marker without dropping bold markup on its item text."""
+    if t.startswith(BOLD_O):
+        rest = t[len(BOLD_O):]
+        if rest and rest[0] in "-–—•":
+            rest = rest[1:].lstrip()
+            if rest.startswith(BOLD_C):
+                return rest[len(BOLD_C):].lstrip()
+            return BOLD_O + rest
+    return re.sub(r"^[-–—•]\s*", "", t, count=1)
+
+
+def parse_events(body_lines, doc_slug=None):
     """Fold visual lines into structural events.
 
     Layout carries meaning the words alone do not: paragraph markers sit on
@@ -463,7 +486,10 @@ def parse_events(body_lines):
 
     # The left margin is where the paragraph markers live.
     xs = [l.x0 for l in body_lines if PARA.match(l.plain())]
-    margin = min(xs) if xs else 60.0
+    # A wrapped quoted subparagraph can look like a new numbered paragraph
+    # and be inset from the real margin.  The predominant paragraph position,
+    # rather than the leftmost one, is the reliable layout anchor.
+    margin = max(set(xs), key=xs.count) if xs else 60.0
 
     def flush():
         nonlocal pending, pending_h3
@@ -483,6 +509,11 @@ def parse_events(body_lines):
         # backwards section number and folds its content into the list.
         malformed_example_label = plain.startswith(
             "3.2.1Examples of AI systems not directly interacting")
+        if malformed_example_label:
+            # The source joins a stray "3.2.1" to the second title inside the
+            # example box. It is not a section heading; the real § 3.2.1
+            # follows later, so omit the stray prefix from the callout.
+            text = text.replace(BOLD_O + "3.2.1" + BOLD_C, "", 1)
 
         # Lettered sub-headings are sometimes wrapped with their continuation
         # set further to the right.  Keep the first line pending so the
@@ -496,7 +527,7 @@ def parse_events(body_lines):
             if continuation and line.x0 > heading_x + 5:
                 # A heading can span more than two visual lines.  Keep it
                 # pending until the next non-continuation block is seen.
-                pending_h3 = (norm_text(heading + " " + plain), heading_x)
+                pending_h3 = (norm_text(heading + " " + text), heading_x)
                 continue
             flush()
 
@@ -542,22 +573,28 @@ def parse_events(body_lines):
             continue
         if discard:
             continue
-        m = DASH.match(text)
+        m = DASH.match(plain)
         if m:
-            events.append(("dash", m.group(1)))
+            events.append(("dash", strip_dash(text)))
             continue
         m = POINT.match(text)
         if m and line.x0 < margin + 55:
             events.append(("point", m.group(1), m.group(2)))
             continue
         if MINOR.match(plain) and line.x0 < margin + 45:
+            if doc_slug == "tr" and last_para in TRANSPARENCY_ROMAN_PARAS:
+                events.append(("roman", re.sub(r"^[ivx]{1,4}\.\s+", "", text)))
+                continue
             # Like lettered sub-headings, roman sub-headings may wrap.
             # Hold the first visual line so an indented continuation can be
             # rejoined above before it is emitted.
-            pending_h3 = (plain, line.x0)
+            pending_h3 = (text, line.x0)
             continue
-        if EXAMPLE.match(re.sub("^[%s]\\d+[%s]" % (SUP_O, SUP_C), "", text)) \
-                and margin + 6 < line.x0 < margin + 22:
+        example_plain = plain.removeprefix("3.2.1") if malformed_example_label else plain
+        example_label = EXAMPLE.match(re.sub("^[%s]\\d+[%s]" % (SUP_O, SUP_C), "", example_plain))
+        # Examples set in a boxed callout begin to the left of the normal
+        # paragraph text, while ordinary prose begins at the paragraph margin.
+        if example_label and (margin + 6 < line.x0 < margin + 22 or line.x0 < margin - 5):
             events.append(("ex", text))
             continue
         events.append(("cont", text))
@@ -577,7 +614,7 @@ def inline(t, footnotes):
     t = re.sub(
         "%s(\\d+)%s" % (SUP_O, SUP_C),
         lambda m: '<sup class="fn" title="%s">%s</sup>' % (
-            esc(footnotes.get(int(m.group(1)), "")).replace('"', "&quot;"),
+            esc(footnote_text(footnotes, int(m.group(1)))).replace('"', "&quot;"),
             m.group(1)),
         t)
     t = t.replace(BOLD_O, "<b>").replace(BOLD_C, "</b>")
@@ -595,6 +632,13 @@ def chunk_html(c, footnotes):
         return '<p class="doc-p">%s</p>' % inline(c[1], footnotes)
     if c[0] == "ex":
         return '<div class="gl-ex"><p class="doc-p">%s</p></div>' % inline(c[1], footnotes)
+    if c[0] == "ex-list":
+        return '<div class="gl-ex"><p class="doc-p">%s</p><ul class="gl-list">%s</ul></div>' % (
+            inline(c[1], footnotes),
+            "".join("<li>%s</li>" % inline(i, footnotes) for i in c[2]))
+    if c[0] == "roman-list":
+        return '<ol class="gl-roman" type="i">%s</ol>' % "".join(
+            "<li>%s</li>" % inline(item, footnotes) for item in c[1])
     if c[0] == "list":
         return '<ul class="gl-list">%s</ul>' % "".join(
             "<li>%s</li>" % inline(i, footnotes) for i in c[1])
@@ -603,7 +647,18 @@ def chunk_html(c, footnotes):
             '<div class="point"><span class="point-marker">(%s)</span>'
             '<div class="point-body"><p class="doc-p">%s</p></div></div>'
             % (m, inline(t, footnotes)) for m, t in c[1])
+    if c[0] == "table":
+        headers, rows = c[1], c[2]
+        return '<div class="gl-table-wrap"><table class="gl-table"><thead><tr>%s</tr></thead><tbody>%s</tbody></table></div>' % (
+            "".join("<th>%s</th>" % inline(h, footnotes) for h in headers),
+            "".join("<tr>%s</tr>" % "".join(
+                "<td>%s</td>" % inline(cell, footnotes) for cell in row)
+                for row in rows))
     return ""
+
+
+def footnote_text(footnotes, number):
+    return re.sub(r"^\(\)\s*", "", footnotes.get(number, "")).strip()
 
 
 class Section:
@@ -628,7 +683,49 @@ class Section:
                         '<div class="gbody">%s</div></div>' % (b[1], b[1], inner))
                 else:
                     out.append(inner)
+        notes = self.footnotes()
+        if notes:
+            out.append('<ol class="gl-footnotes">%s</ol>' % "".join(
+                '<li value="%d">%s</li>' % (n, inline(footnote_text(footnotes, n), {}))
+                for n in notes if footnote_text(footnotes, n)))
         return "".join(out)
+
+    def footnotes(self):
+        found = []
+
+        def scan(text):
+            for number in re.findall(SUP_O + r"(\d+)" + SUP_C, text):
+                n = int(number)
+                if n not in found:
+                    found.append(n)
+
+        for b in self.blocks:
+            if b[0] == "h3":
+                scan(b[1])
+                continue
+            for c in (b[2] if b[0] == "para" else b[1]):
+                if c[0] in ("p", "ex"):
+                    scan(c[1])
+                elif c[0] == "ex-list":
+                    scan(c[1])
+                    for item in c[2]:
+                        scan(item)
+                elif c[0] == "list":
+                    for item in c[1]:
+                        scan(item)
+                elif c[0] == "roman-list":
+                    for item in c[1]:
+                        scan(item)
+                elif c[0] == "points":
+                    for marker, item in c[1]:
+                        scan(item)
+                elif c[0] == "table":
+                    for item in c[1]:
+                        scan(item)
+                    for row in c[2]:
+                        for item in row:
+                            scan(item)
+        return found
 
     def text(self):
         bits = []
@@ -639,11 +736,123 @@ class Section:
                 for c in (b[2] if b[0] == "para" else b[1]):
                     if c[0] in ("p", "ex"):
                         bits.append(plain(c[1]))
+                    elif c[0] == "ex-list":
+                        bits.append(plain(c[1]))
+                        bits.extend(plain(i) for i in c[2])
                     elif c[0] == "list":
+                        bits.extend(plain(i) for i in c[1])
+                    elif c[0] == "roman-list":
                         bits.extend(plain(i) for i in c[1])
                     elif c[0] == "points":
                         bits.extend(plain(t) for m, t in c[1])
+                    elif c[0] == "table":
+                        bits.extend(plain(t) for t in c[1])
+                        bits.extend(plain(t) for row in c[2] for t in row)
         return norm_text(" ".join(bits))
+
+
+TRANSPARENCY_OVERVIEW_TABLE = (
+    ("Provision", "Type of AI system/output", "Transparency obligation",
+     "Exceptions or special regimes"),
+    (
+        ("Art. 50(1)", "AI systems directly interacting with natural persons",
+         "Providers must develop and design the AI system in such a way that the natural persons concerned are informed they are interacting with an AI system.",
+         "Exceptions: (1) the artificial origin of the interaction is obvious; or (2) the system is authorised by law to detect, prevent, investigate or prosecute criminal offences, unless the system is available to the public to report a criminal offence."),
+        ("Art. 50(2)", "AI systems generating or manipulating synthetic image, video, audio or text content",
+         "Providers must ensure the AI system’s outputs are marked in a machine-readable format and detectable as artificially generated or manipulated with technical solutions that are effective, interoperable, robust and reliable.",
+         "Exceptions: (1) the AI system performs an assistive function for standard editing or does not substantially alter the input data or the semantics thereof; or (2) the AI system is authorised by law to detect, prevent, investigate or prosecute criminal offences."),
+        ("Art. 50(3)", "Emotion recognition or biometric categorisation AI systems",
+         "Deployers must inform the natural persons exposed to the system of AI system’s operation.",
+         "Exception: the AI system is permitted by law to detect, prevent or investigate criminal offences."),
+        ("Art. 50(4)", "AI systems generating or manipulating deep fake or text published to inform the public on matters of public interest",
+         "Deployers must disclose that the content has been artificially generated or manipulated.",
+         "Exceptions: (1) the AI system is authorised by law to detect, prevent, investigate or prosecute criminal offence; or (2) the text publication has undergone human review or editorial control and is subject to editorial responsibility. Special disclosure regime applies to deep fakes that are part of artistic, creative, fictional, satirical or analogous works or programmes."),
+    ),
+)
+
+
+def structure_transparency_overview(section):
+    """Restore the Article 50 overview table as a table, not one text run.
+
+    The source has a four-column table split across pages. PDF text extraction
+    emits its cells in visual-line order, which cannot be reliably converted
+    back into rows from whitespace alone. Its published four rows are stable,
+    so retain the source wording in a semantic table for the reader.
+    """
+    if section.sec != "2.1":
+        return
+    for i, block in enumerate(section.blocks):
+        if block[0] != "para" or block[1] != 6:
+            continue
+        intro = "Article 50 AI Act includes four transparency obligations, each applying to different types of AI systems or their outputs."
+        section.blocks[i] = ("para", 6, [
+            ("p", intro),
+            ("table",) + TRANSPARENCY_OVERVIEW_TABLE,
+        ])
+        return
+
+
+def structure_transparency_direct_interaction(section):
+    """Keep the four criteria in § 3.1.1 with paragraph (30), as in the PDF."""
+    if section.sec != "3.1.1":
+        return
+    start = next((i for i, b in enumerate(section.blocks)
+                  if b[0] == "para" and b[1] == 30), None)
+    if start is None:
+        return
+    end = next((i for i in range(start + 1, len(section.blocks))
+                if section.blocks[i][0] == "para"), len(section.blocks))
+    items = []
+    for block in section.blocks[start + 1:end]:
+        if block[0] == "h3":
+            m = re.match(r"^([ivx]+)\.\s+", block[1])
+            if not m:
+                return
+            items.append(block[1][m.end():])
+        elif block[0] == "loose" and items:
+            for chunk in block[1]:
+                if chunk[0] != "p":
+                    return
+                items[-1] = norm_text(items[-1] + " " + chunk[1])
+        else:
+            return
+    if len(items) != 4:
+        return
+
+    # Correct clear glyph-spacing defects in this section against the printed
+    # source. These are extraction errors, not editorial changes to the text.
+    fixes = (
+        ("o ccur", "occur"), ("toprovide", "to provide"),
+        ("perceiv ed", "perceived"), ("I t", "It"),
+        ("actions)and", "actions) and"), ("reply)or", "reply) or"),
+        ("time(multi-turn)", "time (multi-turn)"),
+        ("th ose", "those"), ("interact s", "interacts"),
+        ("AI system s", "AI systems"), ("negotiati ng", "negotiating"),
+        ("personsin", "persons in"), ("agentwith", "agent with"),
+        ("robot s", "robots"), ("tool s", "tools"),
+        ("transcri ption", "transcription"),
+    )
+
+    def repair(t):
+        for before, after in fixes:
+            t = t.replace(before, after)
+        t = re.sub(r"\s+([,.;:])", r"\1", t)
+        t = re.sub(r"\s+\)", ")", t)
+        return t
+
+    items = [repair(item) for item in items]
+    section.blocks[start][2].append(("roman-list", items))
+    del section.blocks[start + 1:end]
+    for block in section.blocks:
+        if block[0] != "para":
+            continue
+        chunks = block[2]
+        for i, chunk in enumerate(chunks):
+            if chunk[0] == "p":
+                chunks[i] = ("p", repair(chunk[1]))
+            elif chunk[0] == "ex-list":
+                chunks[i] = ("ex-list", repair(chunk[1]),
+                             [repair(item) for item in chunk[2]])
 
 
 def build_sections(events, skip):
@@ -689,8 +898,16 @@ def build_sections(events, skip):
         elif kind == "dash":
             if chunks is None:
                 open_chunks()
-            if not chunks or chunks[-1][0] != "list":
+            if chunks and chunks[-1][0] == "ex":
+                chunks[-1] = ("ex-list", chunks[-1][1], [])
+            elif not chunks or chunks[-1][0] not in ("list", "ex-list"):
                 chunks.append(("list", []))
+            chunks[-1][2 if chunks[-1][0] == "ex-list" else 1].append(ev[1])
+        elif kind == "roman":
+            if chunks is None:
+                open_chunks()
+            if not chunks or chunks[-1][0] != "roman-list":
+                chunks.append(("roman-list", []))
             chunks[-1][1].append(ev[1])
         elif kind == "point":
             if chunks is None:
@@ -705,6 +922,10 @@ def build_sections(events, skip):
                 chunks.append(("p", ev[1]))
             elif chunks[-1][0] == "list":
                 chunks[-1][1][-1] = norm_text(chunks[-1][1][-1] + " " + ev[1])
+            elif chunks[-1][0] == "roman-list":
+                chunks[-1][1][-1] = norm_text(chunks[-1][1][-1] + " " + ev[1])
+            elif chunks[-1][0] == "ex-list":
+                chunks[-1][2][-1] = norm_text(chunks[-1][2][-1] + " " + ev[1])
             elif chunks[-1][0] == "points":
                 m, t = chunks[-1][1][-1]
                 chunks[-1][1][-1] = (m, norm_text(t + " " + ev[1]))
@@ -756,7 +977,11 @@ def parse_guidelines():
         doc_sections = []
         for f in doc["files"]:
             body, footnotes, toc = read_pages(os.path.join(HERE, f["file"]))
-            sections = build_sections(parse_events(body), f["skip"])
+            sections = build_sections(parse_events(body, doc["slug"]), f["skip"])
+            if doc["slug"] == "tr":
+                for section in sections:
+                    structure_transparency_overview(section)
+                    structure_transparency_direct_interaction(section)
             prefix = f.get("decimal_prefix")
             for s in sections:
                 # The Contents spelling of the heading is authoritative.
@@ -770,8 +995,8 @@ def parse_guidelines():
 
         for s, footnotes in doc_sections:
             text = s.text()
-            if len(text.split()) < 20:
-                continue      # a bridge sentence, not a section
+            if len(text.split()) < 20 and not (doc["slug"] == "tr" and s.paras):
+                continue      # retain even brief numbered transparency sections
             if doc["slug"] == "hr" and s.sec == "3":
                 continue      # umbrella intro to the Annex III areas
             nodes.append({
@@ -784,6 +1009,7 @@ def parse_guidelines():
                 "label": "%s § %s" % (doc["label"], s.sec),
                 "title": fix_title(s.title),
                 "part": part_of(doc["slug"], s.sec),
+                "partSec": part_key_of(doc["slug"], s.sec),
                 "paras": [min(s.paras), max(s.paras)] if s.paras else None,
                 "html": s.html(footnotes),
                 "text": text,

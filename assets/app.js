@@ -92,7 +92,7 @@
 
   function json(url) {
     var sep = url.indexOf("?") >= 0 ? "&" : "?";
-    return fetch(url + sep + "v=20260930-3").then(function (r) {
+    return fetch(url + sep + "v=20260930-4").then(function (r) {
       if (!r.ok) throw new Error(url + ": HTTP " + r.status);
       return r.json();
     });
@@ -845,7 +845,7 @@
     var parts = [];
     secs.forEach(function (g) {
       var p = parts[parts.length - 1];
-      if (!p || p.title !== g.part) parts.push(p = { n: "§ " + g.sec, title: g.part, first: g.id, count: 0 });
+      if (!p || p.title !== g.part) parts.push(p = { n: "§ " + (g.partSec || g.sec), title: g.part, first: g.id, count: 0 });
       p.count++;
     });
     h += '<div class="block"><div class="block-head"><h2>Parts</h2>' +
