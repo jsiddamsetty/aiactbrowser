@@ -300,6 +300,7 @@ def main():
         "meta": {
             "title": "Regulation (EU) 2024/1689 — Artificial Intelligence Act",
             "shortTitle": "EU AI Act",
+            "cite": "Regulation (EU) 2024/1689",
             "celex": "32024R1689",
             "version": "consolidated",
             "inForce": IN_FORCE,

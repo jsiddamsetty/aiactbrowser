@@ -2,13 +2,15 @@
 """
 Parse the Commission guidelines that interpret the Act into guidance nodes.
 
-Three PDFs, two logical documents:
+Four PDFs, three logical documents:
 
     pp  Guidelines on prohibited AI practices (Article 5) —
         C(2025) 5052 final, adopted 29 July 2025
     hr  Draft guidelines on the classification of high-risk AI systems
         (Article 6) — published for stakeholder consultation, in two parts:
         general principles, and the Annex III use cases
+    tr  Guidelines on transparency obligations for providers and deployers
+        of AI systems (Article 50) — adopted 20 July 2026
 
 A PDF carries no semantic markup, so structure is recovered from typography:
 body text is 11-12pt regular, section headings the same size in bold,
@@ -72,6 +74,20 @@ DOCS = [
              "skip": {"I", "II", "III", "IV", "V", "VI"}},
         ],
     },
+    {
+        "slug": "tr",
+        "name": "Transparency requirements",
+        "label": "Transparency",
+        "title": "Guidelines on Article 50 transparency obligations",
+        "cite": "Commission guidelines · adopted 20 July 2026",
+        "draft": False,
+        "short": "Art. 50",
+        "authority": "Commission",
+        "sourceUrl": "https://digital-strategy.ec.europa.eu/en/library/guidelines-transparency-obligations-providers-and-deployers-ai-systems",
+        "files": [
+            {"file": "source-guidelines-transparency.pdf", "skip": set()},
+        ],
+    },
 ]
 
 # Reading order inside the merged high-risk document: the general principles
@@ -109,6 +125,15 @@ PART_RULES = {
         ("3.7", "Migration & borders · Annex III 7"),
         ("3.8", "Justice & democracy · Annex III 8"),
         ("", "Approach & horizontal issues"),
+    ],
+    "tr": [
+        ("3", "Interactive systems · 50(1)"),
+        ("4", "Synthetic content · 50(2)"),
+        ("5", "Emotion & biometrics · 50(3)"),
+        ("6", "Deep fakes & public-interest text · 50(4)"),
+        ("7", "Horizontal requirements · 50(5)"),
+        ("8", "Enforcement & application"),
+        ("", "Scope & horizontal topics"),
     ],
 }
 
@@ -159,6 +184,15 @@ TARGETS = {
     "hr:3.6": ["anx_III", "term:law enforcement"],
     "hr:3.7": ["anx_III"],
     "hr:3.8": ["anx_III"],
+    "tr:": ["art_50"],
+    "tr:2.3": ["art_50", "term:provider", "term:deployer"],
+    "tr:2.5": ["art_4", "art_5", "art_6", "art_50"],
+    "tr:2.6": ["art_50", "term:general-purpose AI system"],
+    "tr:3.1.1": ["art_50", "term:AI system"],
+    "tr:5": ["art_50", "term:emotion recognition system",
+              "term:biometric categorisation system"],
+    "tr:8": ["art_50", "art_74", "art_99", "art_113"],
+    "tr:9": ["art_50", "art_96"],
 }
 
 
@@ -443,6 +477,13 @@ def parse_events(body_lines):
     for line in body_lines:
         text, plain = line.text, line.plain()
 
+        # The adopted Article 50 guidance labels an in-section examples list
+        # "3.2.1Examples…" (without a separator). It is not a heading: if
+        # accepted as one, it makes the subsequent real § 3.1.2 look like a
+        # backwards section number and folds its content into the list.
+        malformed_example_label = plain.startswith(
+            "3.2.1Examples of AI systems not directly interacting")
+
         # Lettered sub-headings are sometimes wrapped with their continuation
         # set further to the right.  Keep the first line pending so the
         # continuation does not become an orphaned body paragraph.
@@ -459,7 +500,7 @@ def parse_events(body_lines):
                 continue
             flush()
 
-        if line.bold_frac > 0.6 and not PARA.match(plain):
+        if line.bold_frac > 0.6 and not PARA.match(plain) and not malformed_example_label:
             m = HEAD_ROMAN.match(plain) or HEAD_DEC1.match(plain) or \
                 HEAD_DECN.match(plain)
             if m and ascending(m.group(1)):

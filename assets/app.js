@@ -92,7 +92,7 @@
 
   function json(url) {
     var sep = url.indexOf("?") >= 0 ? "&" : "?";
-    return fetch(url + sep + "v=20260925-2").then(function (r) {
+    return fetch(url + sep + "v=20260930-3").then(function (r) {
       if (!r.ok) throw new Error(url + ": HTTP " + r.status);
       return r.json();
     });
@@ -396,7 +396,7 @@
                       sub: d.draft ? "Draft guidelines" : "Guidelines", badge: d.draft ? "draft" : "adopted", draft: d.draft });
     });
     var ordered = instruments.concat(guidance);
-    var order = ["aia", "gdl-pp", "gdl-hr", "kimig", "marisk", "bafin-ai", "gdpr", "dora", "dora-rts-rmf"];
+    var order = ["aia", "gdl-pp", "gdl-hr", "gdl-tr", "kimig", "marisk", "bafin-ai", "gdpr", "dora", "dora-rts-rmf"];
     ordered.forEach(function (entry) { if (entry.id === "kimig") entry.name = "KI-MIG"; });
     return ordered.sort(function (a, b) {
       var ai = order.indexOf(a.id), bi = order.indexOf(b.id);
