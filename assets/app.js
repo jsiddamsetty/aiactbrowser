@@ -244,6 +244,7 @@
       return { kind: "loading" };
     }
     if (bits[0] === "map") return { kind: "map" };
+    if (bits[0] === "aia" && bits[1] === "timeline") return { kind: "timeline" };
     if (bits[0] === "matrix" || bits[0] === "topic") {
       location.replace("#/map");
       return { kind: "loading" };
@@ -286,6 +287,7 @@
   function hashOf(route) {
     if (!route) return "#/";
     if (route.kind === "map") return "#/map";
+    if (route.kind === "timeline") return "#/aia/timeline";
     if (route.kind === "changes") return "#/changes" + (route.focus ? "/" + encodeURIComponent(route.focus) : "");
     if (route.kind === "doc") return docRoute(route.doc);
     return route.id ? routeOf(route.id) : "#/";
@@ -322,14 +324,18 @@
 
     state.route = r;
     closeRails();
-    document.body.classList.toggle("portal-wide", r.kind === "map" || r.kind === "changes");
+    document.body.classList.toggle("portal-wide", r.kind === "map" || r.kind === "changes" || r.kind === "timeline");
     document.body.classList.toggle("changes-wide", r.kind === "changes");
+    document.body.classList.toggle("timeline-wide", r.kind === "timeline");
     el.doc.classList.toggle("is-home", r.kind === "home");
     syncPrimaryNav(r.kind);
 
     if (r.kind === "map") {
       renderMap(); renderGraphFor(null); el.conn.innerHTML = ""; markToc(null);
       document.title = "Interaction map — AI Act Browser";
+    } else if (r.kind === "timeline") {
+      renderTimeline(); renderGraphFor(null); el.conn.innerHTML = ""; markToc(null);
+      document.title = "Implementation timeline — AI Act Browser";
     } else if (r.kind === "changes") {
       renderChanges(r.focus);
       renderGraphFor(null);
@@ -716,6 +722,7 @@
     h += "</div></div>";
     h += '<nav class="home-browse" aria-label="Related material">' +
       '<span>Related material</span>' +
+      '<a href="#/aia/timeline">Implementation timeline</a>' +
       '<a href="#/aia/guidance/pp">Commission guidance</a>' +
       '</nav>';
 
@@ -730,6 +737,60 @@
     el.doc.querySelectorAll("[data-route]").forEach(function (b) {
       b.addEventListener("click", function () { go(b.dataset.route); });
     });
+    wireLinks(el.doc);
+  }
+
+  /* ── implementation timeline ─────────────────────────────── */
+
+  /* This is the practical schedule rather than an exhaustive diary of
+     Commission reporting cycles. Each item is tied back to the provision
+     that sets its application or transition date. */
+  var TIMELINE = [
+    { date: "2024-08-01", label: "1 August 2024", kind: "Milestone", title: "The AI Act enters into force", copy: "The Regulation enters into force; its obligations apply in stages from the dates below.", refs: ["aia:art_113"] },
+    { date: "2025-02-02", label: "2 February 2025", kind: "Applies", title: "Prohibited AI practices and AI literacy", copy: "Chapter I and Chapter II begin to apply, including the prohibition on certain AI practices and the AI literacy obligation.", refs: ["aia:art_4", "aia:art_5", "aia:art_113"] },
+    { date: "2025-08-02", label: "2 August 2025", kind: "Applies", title: "GPAI, governance and penalties", copy: "Rules on general-purpose AI models, notified bodies, governance, confidentiality and specified penalty provisions begin to apply.", refs: ["aia:art_51", "aia:art_56", "aia:art_70", "aia:art_113"] },
+    { date: "2026-08-02", label: "2 August 2026", kind: "Applies", title: "Most remaining obligations", copy: "The remainder of the Act begins to apply, subject to the later high-risk-system and transitional deadlines.", refs: ["aia:art_113"] },
+    { date: "2026-12-02", label: "2 December 2026", kind: "Applies", title: "Synthetic-content transparency transition", copy: "Providers of covered systems placed on the market before 2 August 2026 must comply with the Article 50(2) transparency obligation by this date.", refs: ["aia:art_50", "aia:art_111"] },
+    { date: "2027-08-02", label: "2 August 2027", kind: "Deadline", title: "Legacy GPAI models and national sandboxes", copy: "GPAI models placed on the market before 2 August 2025 must comply; Member States must have at least one national AI regulatory sandbox operational.", refs: ["aia:art_111", "aia:art_57"] },
+    { date: "2027-12-02", label: "2 December 2027", kind: "Applies", title: "High-risk systems in Annex III", copy: "The high-risk AI requirements begin to apply to systems classified as high risk under Article 6(2) and Annex III.", refs: ["aia:art_6", "aia:anx_III", "aia:art_113"] },
+    { date: "2028-08-02", label: "2 August 2028", kind: "Applies", title: "High-risk systems in Annex I", copy: "The high-risk AI requirements begin to apply to systems classified as high risk under Article 6(1) and Annex I.", refs: ["aia:art_6", "aia:anx_I", "aia:art_113"] },
+    { date: "2030-08-02", label: "2 August 2030", kind: "Deadline", title: "Public-authority high-risk systems", copy: "Providers and deployers of high-risk AI systems intended for use by public authorities must have taken the necessary steps to comply.", refs: ["aia:art_111"] },
+    { date: "2030-12-31", label: "31 December 2030", kind: "Deadline", title: "Large-scale IT systems", copy: "Legacy AI systems that are components of the large-scale IT systems in Annex X must be brought into compliance.", refs: ["aia:art_111", "aia:anx_X"] }
+  ];
+
+  function todayIso() {
+    var now = new Date();
+    return now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
+  }
+
+  function timelineRef(ref) {
+    var node = N[ref];
+    return '<a href="' + routeOf(ref) + '">' + esc(node ? shortLabel(node) : ref) + "</a>";
+  }
+
+  function renderTimeline() {
+    var today = todayIso(), next = TIMELINE.filter(function (item) { return item.date >= today; })[0];
+    var h = '<div class="home-hero timeline-hero">' +
+      '<p class="home-eyebrow">EU AI Act · phased application</p>' +
+      '<h1>Implementation timeline</h1>' +
+      '<p>Key dates for the phased application of Regulation (EU) 2024/1689. The schedule foregrounds the obligations most relevant to operators, not every institutional reporting cycle.</p>' +
+      '</div>' +
+      '<div class="timeline-key" aria-label="Timeline key"><span><i class="timeline-dot" data-kind="applies"></i>Obligation starts to apply</span><span><i class="timeline-dot" data-kind="deadline"></i>Transition or compliance deadline</span></div>' +
+      '<ol class="timeline-list">';
+
+    TIMELINE.forEach(function (item) {
+      var stateClass = item.date < today ? " is-past" : item === next ? " is-next" : "";
+      h += '<li class="timeline-item' + stateClass + '">' +
+        '<div class="timeline-marker" aria-hidden="true"></div>' +
+        '<div class="timeline-date"><time datetime="' + item.date + '">' + esc(item.label) + "</time>" +
+          (item === next ? '<span class="timeline-next">Next</span>' : "") + '</div>' +
+        '<article class="timeline-entry"><span class="timeline-kind" data-kind="' + item.kind.toLowerCase() + '">' + esc(item.kind) + "</span>" +
+          '<h2>' + esc(item.title) + "</h2><p>" + esc(item.copy) + '</p><div class="timeline-refs">' +
+          item.refs.map(timelineRef).join("") + "</div></article></li>";
+    });
+
+    h += '</ol><p class="fineprint">Dates are drawn from the AI Act’s application and transitional provisions, principally <a href="#/aia/article/111">Article 111</a> and <a href="#/aia/article/113">Article 113</a>. For the expanded implementation record, see the <a href="https://artificialintelligenceact.eu/implementation-timeline/" target="_blank" rel="noopener">EU AI Act implementation timeline</a>.</p>';
+    el.doc.innerHTML = h;
     wireLinks(el.doc);
   }
 

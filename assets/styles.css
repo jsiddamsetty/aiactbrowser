@@ -473,6 +473,7 @@ button { font: inherit; color: inherit; }
 .portal-wide .rail-left, .portal-wide .rail-right { display: none; }
 .portal-wide .doc { max-width: 1440px; }
 .changes-wide .doc { max-width: 74ch; }
+.timeline-wide .doc { max-width: 78ch; }
 .portal-wide .rail-toggle, .portal-wide .links-toggle { display: none; }
 
 .doc {
@@ -1819,6 +1820,79 @@ h1.doc-title { font-size: clamp(27px, 3vw, 38px); }
   color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+/* Implementation timeline: deliberately restrained so it reads as a useful
+   reference page, not a dashboard competing with the regulation itself. */
+.timeline-hero { margin-bottom: 22px; }
+.timeline-hero p { max-width: 62ch; }
+.timeline-key {
+  display: flex; flex-wrap: wrap; gap: 8px 20px;
+  padding: 10px 0 14px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-3); font-size: 12px;
+}
+.timeline-key span { display: inline-flex; align-items: center; gap: 7px; }
+.timeline-dot, .timeline-marker {
+  display: inline-block; width: 8px; height: 8px;
+  border: 1.5px solid var(--c-article); border-radius: 50%; background: var(--paper);
+}
+.timeline-dot[data-kind="deadline"] { border-color: var(--c-recital); }
+.timeline-list {
+  list-style: none; margin: 0; padding: 12px 0 0;
+}
+.timeline-item {
+  position: relative; display: grid; grid-template-columns: 112px minmax(0, 1fr);
+  column-gap: 22px; padding: 0 0 24px;
+}
+.timeline-item::before {
+  content: ""; position: absolute; left: 3px; top: 10px; bottom: -2px;
+  width: 1px; background: var(--rule);
+}
+.timeline-item:last-child::before { bottom: calc(100% - 10px); }
+.timeline-marker { position: absolute; left: 0; top: 5px; z-index: 1; }
+.timeline-item.is-past .timeline-marker { background: var(--c-article); }
+.timeline-item.is-next .timeline-marker {
+  width: 10px; height: 10px; left: -1px; top: 4px;
+  border-color: var(--c-recital); box-shadow: 0 0 0 4px var(--c-recital-bg);
+}
+.timeline-date {
+  grid-column: 1; padding-left: 20px;
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.35; color: var(--ink-3);
+}
+.timeline-date time { color: var(--ink-2); }
+.timeline-next {
+  display: block; width: max-content; margin-top: 4px;
+  color: var(--c-recital); font-family: var(--sans); font-size: 10.5px; font-weight: 600;
+}
+.timeline-entry { grid-column: 2; margin-top: -3px; }
+.timeline-kind {
+  display: inline-block; color: var(--c-article);
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+  letter-spacing: .05em; text-transform: uppercase;
+}
+.timeline-kind[data-kind="deadline"] { color: var(--c-recital); }
+.timeline-kind[data-kind="milestone"] { color: var(--ink-3); }
+.timeline-entry h2 {
+  margin: 2px 0 4px; font-family: var(--serif); font-size: 18px; font-weight: 600;
+  line-height: 1.25; letter-spacing: -.01em;
+}
+.timeline-entry p { margin: 0; color: var(--ink-2); font-family: var(--serif); font-size: 14px; line-height: 1.55; }
+.timeline-refs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.timeline-refs a {
+  color: var(--accent); font-family: var(--mono); font-size: 10.5px;
+  text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.timeline-refs a:hover { border-bottom-color: currentColor; }
+
+@media (max-width: 560px) {
+  .timeline-item { grid-template-columns: 1fr; padding-left: 22px; column-gap: 0; }
+  .timeline-date, .timeline-entry { grid-column: 1; padding-left: 0; }
+  .timeline-date { margin-bottom: 5px; }
+  .timeline-entry { margin-top: 0; }
+  .timeline-item::before { left: 3px; }
+  .timeline-marker { left: 0; }
+  .timeline-item.is-next .timeline-marker { left: -1px; }
 }
 
 .stats {
