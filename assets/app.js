@@ -34,6 +34,7 @@
     ovView: "graph",
     ovFocus: null,          // provision the expanded graph is centred on
     ovScope: "all",         // "focus" | "all"
+    ovSelect: null,         // provision the inspector panel is describing
     ovDepth: 1
   };
 
@@ -71,6 +72,7 @@
     el.legend = $("#legend"); el.tip = $("#tip");
     el.overlay = $("#overlay"); el.ovFilters = $("#ov-filters");
     el.gempty = $("#gempty"); el.ovSub = $("#ov-sub");
+    el.ovInspect = $("#ov-inspect");
 
     initTheme();
     wireChrome();
@@ -118,7 +120,17 @@
     full = new Graph($("#gfull"), {
       labelMode: "auto",
       dimFocus: false,
-      onSelect: function (n) { closeOverlay(); go(routeOf(n.id)); },
+      // In the expanded graph a click explores rather than leaves: the view
+      // re-centres on the node and the inspector lists what it connects to,
+      // so a defined term can be used as a route to the articles that use it.
+      // Clicking the node already selected, or double-clicking any node,
+      // opens the provision itself.
+      onSelect: function (n) {
+        if (state.ovSelect === n.id) { closeOverlay(); go(routeOf(n.id)); return; }
+        selectInOverlay(n.id);
+      },
+      onOpen: function (n) { closeOverlay(); go(routeOf(n.id)); },
+      onBlank: function () { if (state.ovSelect) { state.ovSelect = null; renderInspect(); } },
       onHover: tipFor
     });
 
@@ -2372,14 +2384,90 @@
     }
 
     full.pinFocus = !!scoped;
-    full.setFocus(scoped ? focus : (state.route && state.route.id));
+    full.setFocus(state.ovSelect || (scoped ? focus : (state.route && state.route.id)));
     full.setData(g.nodes, g.edges);
+    if (state.ovSelect && !g.nodes.some(function (n) { return n.id === state.ovSelect; })) {
+      // A filter switched the selected node off: the panel would describe
+      // something no longer on the canvas.
+      state.ovSelect = null;
+    }
+    renderInspect();
     paintGraphList(g);
     syncOverlayView();
 
     // Grow out of the layout the reader was just looking at, rather than
     // scattering and re-solving from nothing.
     if (seed && scoped) seedFromMini();
+  }
+
+  /* A click in the expanded graph re-centres on the node and describes it:
+     what it is, what it cites, what cites it. Every row opens that provision,
+     which is how a reader gets from a defined term to an article that uses it
+     without first leaving the graph. */
+  function selectInOverlay(id) {
+    if (!N[id]) return;
+    state.ovSelect = id;
+    state.ovFocus = id;
+    state.ovScope = "focus";
+    state.ovDepth = state.ovDepth || 1;
+    syncOvDepth();
+    paintOverlay(true);
+  }
+
+  function renderInspect() {
+    var id = state.ovSelect, n = id && N[id];
+    if (!n) { el.ovInspect.hidden = true; el.ovInspect.innerHTML = ""; return; }
+
+    var outs = (OUT[id] || []).slice().sort(edgeSort);
+    var ins = (IN[id] || []).slice().sort(edgeSort);
+    var external = id.indexOf("ext:") === 0;
+
+    el.ovInspect.innerHTML =
+      '<div class="ov-inspect-head">' +
+        '<p class="kicker" data-type="' + n.type + '">' + esc(shortLabel(n)) + "</p>" +
+        "<h3>" + esc(nodeTitle(n, 90)) + "</h3>" +
+        '<button class="ov-inspect-close icon-btn" type="button" title="Clear selection"' +
+          ' aria-label="Clear selection">' +
+          '<svg viewBox="0 0 24 24"><line x1="5" y1="5" x2="19" y2="19"/>' +
+          '<line x1="19" y1="5" x2="5" y2="19"/></svg></button>' +
+      "</div>" +
+      '<button class="ov-inspect-open" type="button" data-open="' + esc(id) + '">' +
+        (external ? "Open source" : "Open " + esc(shortLabel(n))) + "</button>" +
+      '<div class="ov-inspect-body">' +
+        '<p class="ov-inspect-label">Cites <span class="conn-n">' + outs.length + "</span></p>" +
+        (outs.length
+          ? '<div class="links">' + outs.map(function (e) {
+              return linkRow(N[e.t], KIND_LABEL[e.k] || e.k);
+            }).join("") + "</div>"
+          : '<p class="empty">Cites nothing else.</p>') +
+        '<p class="ov-inspect-label">Cited by <span class="conn-n">' + ins.length + "</span></p>" +
+        (ins.length
+          ? '<div class="links">' + ins.map(function (e) {
+              return linkRow(N[e.s], KIND_LABEL[e.k] || e.k, e.at && e.at[0]);
+            }).join("") + "</div>"
+          : '<p class="empty">Nothing points here.</p>') +
+      "</div>";
+    el.ovInspect.hidden = false;
+    el.ovInspect.scrollTop = 0;
+
+    el.ovInspect.querySelector(".ov-inspect-close").addEventListener("click", function () {
+      state.ovSelect = null;
+      renderInspect();
+    });
+    el.ovInspect.querySelector("[data-open]").addEventListener("click", function () {
+      closeOverlay();
+      go(routeOf(id));
+    });
+    // The rail's own rows navigate in place; inside the overlay they have to
+    // close it first, or the reader lands on a page hidden behind the graph.
+    el.ovInspect.querySelectorAll(".link").forEach(function (b) {
+      b.addEventListener("click", function () {
+        closeOverlay();
+        go(routeOf(b.dataset.id) + (b.dataset.para ? "/" + b.dataset.para : ""));
+      });
+      b.addEventListener("mouseenter", function (ev) { tipForNode(N[b.dataset.id], ev); });
+      b.addEventListener("mouseleave", function () { tipForNode(null); });
+    });
   }
 
   function paintGraphList(g) {
@@ -2397,6 +2485,7 @@
 
   function syncOverlayView() {
     var list = state.ovView === "list";
+    $(".overlay-stage").hidden = list;
     $("#gfull").hidden = list;
     $("#gfull-list").hidden = !list;
     $(".ov-hint").hidden = list;
@@ -2431,6 +2520,7 @@
     // instead of sitting disabled.
     state.ovFocus = focus || (state.route && state.route.id) || null;
     state.ovScope = focus ? "focus" : "all";
+    state.ovSelect = focus && N[focus] ? focus : null;
     state.ovDepth = focus ? (state.depth || 1) : (state.ovDepth || 1);
     syncOvDepth();
     if (wasOpen) { paintOverlay(true); return; }
@@ -2456,6 +2546,7 @@
   function closeOverlay(silent) {
     if (el.overlay.hidden) return;
     el.overlay.hidden = true;
+    state.ovSelect = null;
     $(".topbar").inert = false;
     $(".layout").inert = false;
     document.removeEventListener("keydown", escClose);

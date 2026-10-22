@@ -38,6 +38,10 @@
     // simulation carry it to the edge defeats the point of the view.
     this.pinFocus = !!opts.pinFocus;
     this.onSelect = opts.onSelect || function () {};
+    // A node selected in the overlay only re-centres the view; opening the
+    // provision it stands for is a second, deliberate gesture.
+    this.onOpen = opts.onOpen || null;
+    this.onBlank = opts.onBlank || function () {};
     this.onHover = opts.onHover || function () {};
     this.colors = opts.colors || {};
 
@@ -532,7 +536,10 @@
         self.alpha = Math.max(self.alpha, 0.2);
         self.run();
       }
-      self.panning = null;
+      if (self.panning) {
+        if (self.panning.moved < 3) self.onBlank();
+        self.panning = null;
+      }
       try {
         if (ev && cv.hasPointerCapture && cv.hasPointerCapture(ev.pointerId)) {
           cv.releasePointerCapture(ev.pointerId);
@@ -560,7 +567,14 @@
       self.draw();
     }, { passive: false });
 
-    cv.addEventListener("dblclick", function () { self.userMoved = false; self.fit(); self.draw(); });
+    // Double-click opens the provision under the cursor; on empty canvas it
+    // still re-fits the view.
+    cv.addEventListener("dblclick", function (ev) {
+      var p = pos(ev);
+      var n = self.onOpen && self.nodeAt(p.x, p.y);
+      if (n) { self.onOpen(n); return; }
+      self.userMoved = false; self.fit(); self.draw();
+    });
   };
 
   Graph.prototype.destroy = function () {
