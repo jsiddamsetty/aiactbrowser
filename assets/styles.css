@@ -106,6 +106,23 @@
   --c-module-bg:     #8A3D1514;
   --c-external-bg:   #767C8A14;
 
+  /* instruments — colour says which regulation a provision belongs to;
+     shape says what kind of provision it is. The four DORA documents share
+     one hue because they are one body of law, and so do the two BaFin texts. */
+  --c-act-aia:   #1F4FCC;
+  --c-act-gdpr:  #00806B;
+  --c-act-dora:  #A65300;
+  --c-act-bafin: #A30877;
+  --c-act-kimig: #6A40D8;
+  --c-act-ext:   #767C8A;
+
+  --c-act-aia-bg:   #1F4FCC14;
+  --c-act-gdpr-bg:  #00806B14;
+  --c-act-dora-bg:  #A6530014;
+  --c-act-bafin-bg: #A3087714;
+  --c-act-kimig-bg: #6A40D814;
+  --c-act-ext-bg:   #767C8A14;
+
   --accent:     var(--c-article);
   --focus:      #1F4FCC;
 
@@ -142,6 +159,20 @@
   --c-gdpr:       #A7D8C1;
   --c-module:      #F59E72;
   --c-external:    #A5AAB4;
+
+  --c-act-aia:   #718BFF;
+  --c-act-gdpr:  #2FBD9A;
+  --c-act-dora:  #E0A040;
+  --c-act-bafin: #DD70B4;
+  --c-act-kimig: #9678EC;
+  --c-act-ext:   #A5AAB4;
+
+  --c-act-aia-bg:   #718BFF24;
+  --c-act-gdpr-bg:  #2FBD9A24;
+  --c-act-dora-bg:  #E0A04024;
+  --c-act-bafin-bg: #DD70B424;
+  --c-act-kimig-bg: #9678EC24;
+  --c-act-ext-bg:   #A5AAB424;
 
   --c-article-bg:    #4D68DC24;
   --c-recital-bg:    #AF860024;
@@ -728,10 +759,16 @@ sup.fn:hover { color: var(--accent); }
   border-bottom: 1px solid var(--rule-2);
 }
 .link:hover { background: var(--sunk); }
+/* An id chip says both things the graph says: its glyph is the kind of
+   provision, its colour the instrument. Learn the shapes here and the graph
+   needs no legend. */
 .link-id {
   font-family: var(--mono); font-size: 11.5px; font-weight: 500;
   flex: none; min-width: 78px;
+  display: inline-flex; align-items: center; gap: 5px;
 }
+.link-id .lg-glyph, .res-id .lg-glyph { width: 9px; height: 9px; fill: currentColor; }
+.res-id { display: inline-flex; align-items: center; gap: 5px; }
 .link-title {
   font-size: 13px; min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -756,7 +793,17 @@ sup.fn:hover { color: var(--accent); }
 [data-type="gdpr"]       { --c: var(--c-gdpr); }
 [data-type="module"]     { --c: var(--c-module); }
 [data-type="external"]   { --c: var(--c-external); }
+/* instrument colours override the type fallback above — same specificity,
+   later rule wins, so a chip carrying both reads as its regulation. */
+[data-corpus="aia"]   { --c: var(--c-act-aia); }
+[data-corpus="gdpr"]  { --c: var(--c-act-gdpr); }
+[data-corpus="dora"]  { --c: var(--c-act-dora); }
+[data-corpus="bafin"] { --c: var(--c-act-bafin); }
+[data-corpus="kimig"] { --c: var(--c-act-kimig); }
+[data-corpus="ext"]   { --c: var(--c-act-ext); }
+
 .kicker[data-type], .link-id[data-type], .res-id[data-type] { color: var(--c); }
+.kicker[data-corpus], .link-id[data-corpus], .res-id[data-corpus] { color: var(--c); }
 .kicker[data-type="article"]    { background: var(--c-article-bg); }
 .kicker[data-type="recital"]    { background: var(--c-recital-bg); }
 .kicker[data-type="annex"]      { background: var(--c-annex-bg); }
@@ -766,6 +813,12 @@ sup.fn:hover { color: var(--accent); }
 .kicker[data-type="gdpr"]       { background: var(--c-gdpr-bg); }
 .kicker[data-type="module"]      { background: var(--c-module-bg); }
 .kicker[data-type="external"]    { background: var(--c-external-bg); }
+.kicker[data-corpus="aia"]   { background: var(--c-act-aia-bg); }
+.kicker[data-corpus="gdpr"]  { background: var(--c-act-gdpr-bg); }
+.kicker[data-corpus="dora"]  { background: var(--c-act-dora-bg); }
+.kicker[data-corpus="bafin"] { background: var(--c-act-bafin-bg); }
+.kicker[data-corpus="kimig"] { background: var(--c-act-kimig-bg); }
+.kicker[data-corpus="ext"]   { background: var(--c-act-ext-bg); }
 
 /* ── graph rail ────────────────────────────────────────────── */
 
@@ -822,6 +875,18 @@ sup.fn:hover { color: var(--accent); }
 }
 .lg:hover { border-color: var(--rule); }
 .lg-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); flex: none; }
+/* Kind chips carry the silhouette, not a colour: shape is the channel they
+   stand for, and tinting them would claim a second meaning they do not have. */
+.lg-glyph { width: 11px; height: 11px; flex: none; fill: var(--ink-2); }
+.lg-axis {
+  display: inline-flex; align-items: center;
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ink-3);
+  padding: 0 2px 0 4px;
+}
+.lg-axis:not(:first-child) { margin-left: 6px; }
+.lg-glyph-act { fill: none; stroke: var(--c); stroke-width: 2.6px; }
+.lg.is-off .lg-glyph-act { stroke: var(--c); opacity: 0.45; }
 .lg-n { font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
 
 /* Switched off is a hollow dot, not a faded chip: washing the whole control out
@@ -831,6 +896,7 @@ sup.fn:hover { color: var(--accent); }
   background: transparent;
   box-shadow: inset 0 0 0 1.5px var(--c);
 }
+.lg.is-off .lg-glyph { fill: none; stroke: var(--ink-3); stroke-width: 1.6px; }
 
 .conn { flex: 1; overflow-y: auto; padding: 14px 12px 40px; }
 .conn .block { margin-top: 0; }

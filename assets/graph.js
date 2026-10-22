@@ -60,7 +60,8 @@
       var a = (i / nodes.length) * Math.PI * 2;
       var r = 40 + Math.sqrt(i) * 16;
       return {
-        id: n.id, type: n.type, label: n.label, title: n.title,
+        id: n.id, type: n.type, kind: n.kind || "article", act: n.act || "ext",
+        label: n.label, title: n.title,
         deg: n.deg || 1, rank: n.rank == null ? 2 : n.rank,
         r: n.r || 5,
         x: old ? old.x : w / 2 + Math.cos(a) * r + (Math.random() - 0.5),
@@ -237,6 +238,58 @@
     return best;
   };
 
+  /* ── shapes ───────────────────────────────────────────────────
+     Colour says which regulation a node belongs to; its silhouette says what
+     kind of provision it is. Shape survives where hue does not: a crowd of
+     marks in one colour is still readable, and a reader who has learnt that
+     terms are triangles never has to consult the legend again.
+
+     Every glyph is sized from the same r, so a square and a circle of the
+     same r carry the same visual weight rather than the same area. */
+  function glyph(c, kind, x, y, r) {
+    c.beginPath();
+    if (kind === "recital") {
+      c.moveTo(x, y - r * 1.25); c.lineTo(x + r * 1.25, y);
+      c.lineTo(x, y + r * 1.25); c.lineTo(x - r * 1.25, y);
+      c.closePath();
+    } else if (kind === "annex") {
+      var s = r * 0.92;
+      c.rect(x - s, y - s, s * 2, s * 2);
+    } else if (kind === "definition") {
+      c.moveTo(x, y - r * 1.3);
+      c.lineTo(x + r * 1.18, y + r * 0.84);
+      c.lineTo(x - r * 1.18, y + r * 0.84);
+      c.closePath();
+    } else if (kind === "guidance") {
+      // A bar, not a rounded square: at 6px a rounded square and the annex
+      // square are the same mark, and guidance is the most numerous kind
+      // in the Act — it has to be separable at a glance.
+      var gw = r * 1.3, gh = r * 0.72;
+      roundRect(c, x - gw, y - gh, gw * 2, gh * 2, gh);
+    } else if (kind === "section") {
+      for (var i = 0; i < 6; i++) {
+        var a = i * Math.PI / 3;
+        var px = x + r * 1.12 * Math.cos(a), py = y + r * 1.12 * Math.sin(a);
+        if (i) c.lineTo(px, py); else c.moveTo(px, py);
+      }
+      c.closePath();
+    } else {
+      // Articles, and anything unrecognised, stay circles: they are the bulk
+      // of every view and the shape that reads smallest.
+      c.arc(x, y, r, 0, 6.2832);
+    }
+  }
+
+  function roundRect(c, x, y, w, h, rad) {
+    if (c.roundRect) { c.roundRect(x, y, w, h, rad); return; }
+    c.moveTo(x + rad, y);
+    c.arcTo(x + w, y, x + w, y + h, rad);
+    c.arcTo(x + w, y + h, x, y + h, rad);
+    c.arcTo(x, y + h, x, y, rad);
+    c.arcTo(x, y, x + w, y, rad);
+    c.closePath();
+  }
+
   /* ── paint ────────────────────────────────────────────────── */
 
   Graph.prototype.draw = function () {
@@ -246,17 +299,10 @@
     if (!this.nodes.length) return;
 
     var css = getComputedStyle(document.documentElement);
-    var col = {
-      article: css.getPropertyValue("--c-article").trim(),
-      recital: css.getPropertyValue("--c-recital").trim(),
-      annex: css.getPropertyValue("--c-annex").trim(),
-      definition: css.getPropertyValue("--c-definition").trim(),
-      guidance: css.getPropertyValue("--c-guidance").trim(),
-      kimig: css.getPropertyValue("--c-kimig").trim(),
-      gdpr: css.getPropertyValue("--c-gdpr").trim(),
-      module: css.getPropertyValue("--c-module").trim(),
-      external: css.getPropertyValue("--c-external").trim()
-    };
+    var col = {};
+    ["aia", "gdpr", "dora", "bafin", "kimig", "ext"].forEach(function (act) {
+      col[act] = css.getPropertyValue("--c-act-" + act).trim();
+    });
     var inkMuted = css.getPropertyValue("--ink-3").trim();
     var ink = css.getPropertyValue("--ink").trim();
     var panel = css.getPropertyValue("--panel").trim();
@@ -294,7 +340,7 @@
       c.moveTo(ed.s.x, ed.s.y);
       c.lineTo(ed.t.x, ed.t.y);
       if (lit) {
-        c.strokeStyle = col[ed.t.type] || inkMuted;
+        c.strokeStyle = col[ed.t.act] || inkMuted;
         c.globalAlpha = 0.75;
         c.lineWidth = 1.6 / this.scale;
       } else {
@@ -315,15 +361,26 @@
       var dim = near && !near[n.id];
 
       c.globalAlpha = dim ? (hard ? 0.2 : 0.6) : 1;
-      c.beginPath();
-      c.arc(n.x, n.y, n.r, 0, 6.2832);
-      c.fillStyle = col[n.type] || inkMuted;
-      c.fill();
 
-      // A surface ring keeps overlapping marks separable.
-      c.lineWidth = 1.5 / this.scale;
-      c.strokeStyle = panel;
-      c.stroke();
+      // Provisions of instruments this browser does not carry are drawn
+      // hollow: a ring reads as "elsewhere" at any size, where a polygon
+      // silhouette would not.
+      if (n.kind === "external") {
+        c.beginPath();
+        c.arc(n.x, n.y, n.r * 0.85, 0, 6.2832);
+        c.strokeStyle = col[n.act] || inkMuted;
+        c.lineWidth = Math.max(1.4, n.r * 0.42) / this.scale;
+        c.stroke();
+      } else {
+        glyph(c, n.kind, n.x, n.y, n.r);
+        c.fillStyle = col[n.act] || inkMuted;
+        c.fill();
+
+        // A surface ring keeps overlapping marks separable.
+        c.lineWidth = 1.5 / this.scale;
+        c.strokeStyle = panel;
+        c.stroke();
+      }
     }
     c.globalAlpha = 1;
 
@@ -331,6 +388,7 @@
     // findable in a crowd instead of being one dot among hundreds.
     if (focusMark) {
       var fr = Math.max(focusMark.r * 1.5, 9 / this.scale);
+      var fcol = col[focusMark.act] || inkMuted;
       c.beginPath();
       c.arc(focusMark.x, focusMark.y, fr + 7 / this.scale, 0, 6.2832);
       c.fillStyle = panel;
@@ -338,17 +396,18 @@
       c.fill();
       c.globalAlpha = 1;
 
-      c.beginPath();
-      c.arc(focusMark.x, focusMark.y, fr, 0, 6.2832);
-      c.fillStyle = col[focusMark.type] || inkMuted;
+      glyph(c, focusMark.kind, focusMark.x, focusMark.y, fr);
+      c.fillStyle = fcol;
       c.fill();
       c.lineWidth = 2 / this.scale;
       c.strokeStyle = panel;
       c.stroke();
 
+      // The halo stays a circle whatever the glyph is: it marks the spot,
+      // and a ringed hexagon reads as a second shape rather than a highlight.
       c.beginPath();
       c.arc(focusMark.x, focusMark.y, fr + 5 / this.scale, 0, 6.2832);
-      c.strokeStyle = col[focusMark.type] || ink;
+      c.strokeStyle = fcol;
       c.lineWidth = 2 / this.scale;
       c.stroke();
     }
@@ -412,7 +471,7 @@
         c.globalAlpha = near && !near[q.id] ? (hard ? 0.25 : 0.55) : 0.95;
         c.fillStyle = panel;
         c.fillRect(bx, by, bw2, bh2);
-        c.fillStyle = isF ? ink : (col[q.type] || ink);
+        c.fillStyle = isF ? ink : (col[q.act] || ink);
         c.fillText(txt, q.x, by + size * 0.1);
       }
       c.globalAlpha = 1;

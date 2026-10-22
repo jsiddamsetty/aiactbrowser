@@ -18,8 +18,65 @@
   var CORPUS_DOCS = {}, LOADS = {};
 
   var TYPES = ["article", "recital", "annex", "definition", "guidance", "kimig", "gdpr", "module", "external"];
-  var ALL_TYPES = { article: true, recital: true, annex: true, definition: true, guidance: true, kimig: true, gdpr: true, module: true, external: true };
   var TYPE_LABEL = { article: "Articles", recital: "Recitals", annex: "Annexes", definition: "Terms", guidance: "Guidance", kimig: "KI-MIG", gdpr: "GDPR", module: "MaRisk", external: "External" };
+
+  /* The graph carries two questions at once, and they are not the same
+     question: what kind of provision is this, and which law is it in. The
+     node type alone answered neither cleanly — it called an AI Act article
+     and a DORA article the same thing, and treated 'GDPR' as a kind of
+     provision. So kind drives the mark's shape and instrument drives its
+     colour, and each gets its own filter. */
+  var KINDS = ["article", "recital", "annex", "definition", "guidance", "section"];
+  var KIND_NAME = {
+    article: "Articles", recital: "Recitals", annex: "Annexes",
+    definition: "Terms", guidance: "Guidance", section: "Sections"
+  };
+  var TYPE_KIND = {
+    article: "article", gdpr: "article", recital: "recital", annex: "annex",
+    definition: "definition", guidance: "guidance",
+    kimig: "section", module: "section", external: "external"
+  };
+
+  // The four DORA documents are one body of law and share a hue; so do the
+  // two BaFin texts. Shape still tells a regulation from its technical
+  // standards, and the label says which document.
+  var ACTS = ["aia", "gdpr", "dora", "bafin", "kimig", "ext"];
+  var ACT_NAME = {
+    aia: "EU AI Act", gdpr: "GDPR", dora: "DORA",
+    bafin: "BaFin", kimig: "KI-MIG", ext: "External"
+  };
+  var CORPUS_ACT = {
+    aia: "aia", gdpr: "gdpr",
+    dora: "dora", "dora-rts-rmf": "dora", "dora-rts-sub": "dora", "dora-its-register": "dora",
+    marisk: "bafin", "bafin-ai": "bafin",
+    kimig: "kimig", ext: "ext"
+  };
+
+  function kindOf(n) { return (n && TYPE_KIND[n.type]) || "article"; }
+  function actOf(n) { return CORPUS_ACT[corpusOf(n)] || "ext"; }
+
+  function allShown() {
+    var o = { kind: {}, act: {} };
+    KINDS.forEach(function (k) { o.kind[k] = true; });
+    ACTS.forEach(function (a) { o.act[a] = true; });
+    return o;
+  }
+
+  // External nodes have no provision kind to speak of — they are a reference
+  // out of the collection — so only their instrument chip governs them.
+  function nodeVisible(n, show) {
+    if (!n) return false;
+    var k = kindOf(n);
+    if (k !== "external" && !show.kind[k]) return false;
+    return show.act[actOf(n)] !== false;
+  }
+
+  function graphNode(n, r, rank) {
+    return {
+      id: n.id, type: n.type, kind: kindOf(n), act: actOf(n),
+      label: shortLabel(n), title: n.title, r: r, rank: rank
+    };
+  }
   var KIND_LABEL = {
     cites: "cites", annex: "annex", uses: "defined term",
     explains: "cites", relates: "topical", interprets: "interprets", concords: "related", xcites: "cross-citation"
@@ -28,8 +85,8 @@
   var state = {
     route: null,
     depth: 1,
-    show: Object.assign({}, ALL_TYPES),
-    ovShow: Object.assign({}, ALL_TYPES),
+    show: allShown(),
+    ovShow: allShown(),
     edgeShow: { cited: true, cross: true, editorial: true, derived: true },
     ovView: "graph",
     ovFocus: null,          // provision the expanded graph is centred on
@@ -864,7 +921,8 @@
     var doc = CORPUS_DOCS[slug] || {}, meta = doc.meta || {}, entry = registryEntry(slug) || {};
     var nodes = (doc.articles || doc.guidance || doc.modules || []);
     var h = '<nav class="crumb"><a href="#/">Home</a><i>›</i><span>' + esc(entry.shortTitle || meta.shortTitle || slug) + '</span></nav>' +
-      '<span class="kicker" data-type="' + (nodes[0] ? nodes[0].type : "article") + '">' + esc(entry.bindingLevel || "Document") + '</span>' +
+      '<span class="kicker" data-type="' + (nodes[0] ? nodes[0].type : "article") + '"' +
+        ' data-corpus="' + (CORPUS_ACT[slug] || "ext") + '">' + esc(entry.bindingLevel || "Document") + '</span>' +
       '<h1 class="doc-title">' + esc(meta.title || entry.title || slug) + '</h1>' +
       '<p class="doc-num">' + esc(meta.cite || meta.celex || entry.citation || "") + '</p>' +
       '<ul class="doc-facts"><li><b>' + nodes.length + '</b> provisions</li>' +
@@ -907,7 +965,8 @@
     // The note below names the citation and status, so this line doesn't.
     var h = '<nav class="crumb"><a href="#/aia">EU AI Act</a><i>›</i><span>Guidance</span>' +
       "<i>›</i><span>" + esc(d.name) + "</span></nav>" +
-      '<span class="kicker" data-type="guidance">' +
+      '<span class="kicker" data-type="guidance" data-corpus="' +
+        (d.authority === "BaFin" ? "bafin" : "aia") + '">' +
         (d.authority === "BaFin" ? "Supervisory guidance" : "Commission guidance") + "</span>" +
       '<h1 class="doc-title">' + esc(d.title) + "</h1>" +
       '<p class="doc-num">' + secs.length + " sections" +
@@ -953,7 +1012,7 @@
 
     var h = '<nav class="crumb"><a href="#/">Home</a><i>›</i><span>' +
       esc(km.abbr || "KI-MIG") + "</span></nav>" +
-      '<span class="kicker" data-type="kimig">German implementing law</span>' +
+      '<span class="kicker" data-type="kimig" data-corpus="kimig">German implementing law</span>' +
       '<h1 class="doc-title"' + (de ? ' lang="de"' : "") + ">" +
       esc(de ? km.title : km.titleEn || km.title) + "</h1>" +
       '<p class="doc-num">' + esc(km.abbr || "") + " · " + esc(km.cite || "") + "</p>";
@@ -994,7 +1053,7 @@
     var gm = DATA.gdprMeta || {};
 
     var h = '<nav class="crumb"><a href="#/">Home</a><i>›</i><span>' + esc(gm.abbr) + "</span></nav>" +
-      '<span class="kicker" data-type="gdpr">Related regulation</span>' +
+      '<span class="kicker" data-type="gdpr" data-corpus="gdpr">Related regulation</span>' +
       '<h1 class="doc-title">' + esc(gm.title) + "</h1>" +
       '<p class="doc-num">' + esc(gm.abbr) + " · " + esc(gm.cite) + " · " + esc(gm.oj) + "</p>" +
       '<p class="doc-alt">' + esc(gm.longTitle) + "</p>";
@@ -1469,7 +1528,8 @@
         esc(TYPE_LABEL[n.type]) + "</span></nav>";
     }
 
-    h += '<span class="kicker" data-type="' + n.type + '">' + esc(kickerText(n)) + "</span>";
+    h += '<span class="kicker" data-type="' + n.type + '" data-corpus="' + actOf(n) + '">' +
+      esc(kickerText(n)) + "</span>";
     if (n.status) {
       h += '<a class="kicker kicker-chg" data-status="' + n.status + '" href="#/changes/' +
         esc(n.id) + '">' + esc(STATUS_LABEL[n.status]) + " · see the change</a>";
@@ -1955,7 +2015,8 @@
     if (!n) return "";
     return '<button class="link" type="button" data-id="' + n.id + '"' +
       (para ? ' data-para="' + esc(para) + '"' : "") + ">" +
-      '<span class="link-id" data-type="' + n.type + '">' + esc(shortLabel(n)) + "</span>" +
+      '<span class="link-id" data-type="' + n.type + '" data-corpus="' + actOf(n) + '">' +
+      glyphSvg(kindOf(n)) + esc(shortLabel(n)) + "</span>" +
       '<span class="link-title">' + esc(nodeTitle(n, 60)) + "</span>" +
       (kind ? '<span class="link-kind">' + esc(kind) + "</span>" : "") +
       "</button>";
@@ -2177,9 +2238,11 @@
 
   /* ── graph wiring ─────────────────────────────────────────── */
 
+  // A mark now carries a silhouette as well as a colour, and a silhouette
+  // needs a few pixels to be one: below about 5px every glyph is a dot again.
   function nodeR(id) {
     var d = (OUT[id] ? OUT[id].length : 0) + (IN[id] ? IN[id].length : 0);
-    return Math.max(3.6, Math.min(3.2 + Math.sqrt(d) * 1.15, 13));
+    return Math.max(5, Math.min(3.6 + Math.sqrt(d) * 1.15, 13));
   }
 
   // KI-MIG sections are leaves for the same reason as terms and guidance:
@@ -2196,7 +2259,7 @@
         (OUT[cur] || []).concat(IN[cur] || []).filter(edgeVisible).forEach(function (e) {
           var other = e.s === cur ? e.t : e.s;
           if (keep[other] != null || !N[other]) return;
-          if (!show[N[other].type]) return;
+          if (!nodeVisible(N[other], show)) return;
           keep[other] = d;
           // Defined terms and guidance sections are leaves, never routes.
           // 'provider' is used by 161 provisions and a guidance section can
@@ -2213,10 +2276,7 @@
     var set = {};
     ids.forEach(function (i) { set[i] = 1; });
     var nodes = ids.map(function (i) {
-      return {
-        id: i, type: N[i].type, label: shortLabel(N[i]), title: N[i].title,
-        r: i === id ? Math.max(nodeR(i), 8) : nodeR(i), rank: keep[i]
-      };
+      return graphNode(N[i], i === id ? Math.max(nodeR(i), 8) : nodeR(i), keep[i]);
     });
     var edges = EDGES.filter(function (e) { return set[e.s] && set[e.t] && edgeVisible(e); });
     return { nodes: nodes, edges: edges };
@@ -2234,7 +2294,7 @@
       var dg = docGraph(doc, state.show);
       mini.setFocus(null).setData(dg.nodes, dg.edges);
       el.gempty.hidden = dg.nodes.length > 0;
-      updateLegend(docGraph(doc, ALL_TYPES).nodes);
+      updateLegend(docGraph(doc, allShown()).nodes);
       return;
     }
     if (!id) {
@@ -2244,7 +2304,7 @@
       var sample = wholeGraph(state.show);
       mini.setFocus(null).setData(sample.nodes, sample.edges);
       el.gempty.hidden = sample.nodes.length > 0;
-      updateLegend(wholeGraph(ALL_TYPES).nodes);
+      updateLegend(wholeGraph(allShown()).nodes);
       return;
     }
     title.textContent = "Neighbourhood";
@@ -2254,7 +2314,7 @@
     el.gempty.hidden = g.nodes.length > 1;
     // Count what is *there*, not what is currently drawn — a legend chip that
     // reads 0 because it is switched off tells the reader nothing.
-    updateLegend(neighbourhood(id, state.depth, ALL_TYPES).nodes);
+    updateLegend(neighbourhood(id, state.depth, allShown()).nodes);
   }
 
   var COLLECTION = {
@@ -2270,26 +2330,25 @@
       : corpusDoc ? [].concat(corpusDoc.articles || [], corpusDoc.recitals || [], corpusDoc.annexes || [], corpusDoc.definitions || [], corpusDoc.guidance || [], corpusDoc.modules || []) : [];
     var set = {};
     own.forEach(function (n) {
-      if (show[n.type]) set[n.id] = 1;
+      if (nodeVisible(n, show)) set[n.id] = 1;
       (OUT[n.id] || []).concat(IN[n.id] || []).filter(edgeVisible).forEach(function (e) {
         var other = e.s === n.id ? e.t : e.s;
-        if (N[other] && show[N[other].type]) set[other] = 1;
+        if (nodeVisible(N[other], show)) set[other] = 1;
       });
     });
-    var nodes = Object.keys(set).map(function (i) {
-      return { id: i, type: N[i].type, label: shortLabel(N[i]), title: N[i].title, r: nodeR(i) };
-    });
+    var nodes = Object.keys(set).map(function (i) { return graphNode(N[i], nodeR(i)); });
     var edges = EDGES.filter(function (e) { return set[e.s] && set[e.t] && edgeVisible(e); });
     return { nodes: nodes, edges: edges };
   }
 
   function wholeGraph(show) {
     var nodes = [], set = {};
-    TYPES.forEach(function (t) {
-      if (!show[t]) return;
-      Object.keys(N).map(function (id) { return N[id]; }).filter(function (n) { return n.type === t; }).forEach(function (n) {
+    var all = Object.keys(N).map(function (id) { return N[id]; });
+    KINDS.concat(["external"]).forEach(function (k) {
+      all.forEach(function (n) {
+        if (kindOf(n) !== k || !nodeVisible(n, show)) return;
         set[n.id] = 1;
-        nodes.push({ id: n.id, type: n.type, label: shortLabel(n), title: n.title, r: nodeR(n.id) });
+        nodes.push(graphNode(n, nodeR(n.id)));
       });
     });
     var edges = EDGES.filter(function (e) { return set[e.s] && set[e.t] && edgeVisible(e); });
@@ -2304,52 +2363,86 @@
   }
   function edgeVisible(edge) { return state.edgeShow[edgeFamily(edge)] !== false; }
 
-  function buildLegend() {
-    el.legend.innerHTML = TYPES.map(function (t) {
-      return '<button class="lg' + (state.show[t] ? "" : " is-off") + '" type="button" data-type="' + t + '"' +
-        ' aria-pressed="' + (state.show[t] ? "true" : "false") + '">' +
-        '<span class="lg-dot"></span><span>' + TYPE_LABEL[t] + '</span>' +
-        '<span class="lg-n" data-n="' + t + '"></span></button>';
-    }).join("");
+  /* The legend is the key to both channels, so each chip has to carry the
+     mark it stands for: the kind chips show their silhouette, the instrument
+     chips their colour. A row of identical dots would explain neither. */
+  var GLYPH_PATH = {
+    article: '<circle cx="7" cy="7" r="5.6"/>',
+    recital: '<polygon points="7,0.9 13.1,7 7,13.1 0.9,7"/>',
+    annex: '<rect x="1.8" y="1.8" width="10.4" height="10.4" rx="1"/>',
+    definition: '<polygon points="7,1 13.1,12 0.9,12"/>',
+    guidance: '<rect x="0.4" y="4" width="13.2" height="6" rx="3"/>',
+    section: '<polygon points="13.3,7 10.2,12.4 3.8,12.4 0.7,7 3.8,1.6 10.2,1.6"/>',
+    external: '<circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="2.6"/>'
+  };
 
-    el.legend.querySelectorAll(".lg").forEach(function (b) {
+  function glyphSvg(kind) {
+    return '<svg class="lg-glyph" viewBox="0 0 14 14" aria-hidden="true" focusable="false">' +
+      (GLYPH_PATH[kind] || GLYPH_PATH.article) + "</svg>";
+  }
+
+  function filterChips(show, counts) {
+    return '<span class="lg-axis">Kind</span>' +
+      KINDS.map(function (k) {
+        return '<button class="lg' + (show.kind[k] ? "" : " is-off") + '" type="button"' +
+          ' data-kind="' + k + '" aria-pressed="' + (show.kind[k] ? "true" : "false") + '">' +
+          glyphSvg(k) + "<span>" + KIND_NAME[k] + "</span>" +
+          (counts ? '<span class="lg-n" data-n="kind:' + k + '"></span>' : "") + "</button>";
+      }).join("") +
+      '<span class="lg-axis">Act</span>' +
+      ACTS.map(function (a) {
+        return '<button class="lg' + (show.act[a] ? "" : " is-off") + '" type="button"' +
+          ' data-act="' + a + '" data-corpus="' + a + '"' +
+          ' aria-pressed="' + (show.act[a] ? "true" : "false") + '">' +
+          // External nodes are the one case where kind and instrument are the
+          // same fact, so this chip shows the ring they are drawn as.
+          (a === "ext"
+            ? '<svg class="lg-glyph lg-glyph-act" viewBox="0 0 14 14" aria-hidden="true" focusable="false">' +
+              '<circle cx="7" cy="7" r="4.6"/></svg>'
+            : '<span class="lg-dot"></span>') +
+          "<span>" + ACT_NAME[a] + "</span>" +
+          (counts ? '<span class="lg-n" data-n="act:' + a + '"></span>' : "") + "</button>";
+      }).join("");
+  }
+
+  function wireChips(root, show, after) {
+    root.querySelectorAll(".lg").forEach(function (b) {
       b.addEventListener("click", function () {
-        var t = b.dataset.type;
-        state.show[t] = !state.show[t];
-        b.classList.toggle("is-off", !state.show[t]);
-        b.setAttribute("aria-pressed", state.show[t] ? "true" : "false");
-        renderGraphFor(state.route && state.route.id);
+        var axis = b.dataset.kind ? "kind" : "act";
+        var key = b.dataset.kind || b.dataset.act;
+        show[axis][key] = !show[axis][key];
+        b.classList.toggle("is-off", !show[axis][key]);
+        b.setAttribute("aria-pressed", show[axis][key] ? "true" : "false");
+        after();
       });
+    });
+  }
+
+  function buildLegend() {
+    el.legend.innerHTML = filterChips(state.show, true);
+    wireChips(el.legend, state.show, function () {
+      renderGraphFor(state.route && state.route.id);
     });
   }
 
   function updateLegend(nodes) {
     var count = {};
-    nodes.forEach(function (n) { count[n.type] = (count[n.type] || 0) + 1; });
+    nodes.forEach(function (n) {
+      count["kind:" + n.kind] = (count["kind:" + n.kind] || 0) + 1;
+      count["act:" + n.act] = (count["act:" + n.act] || 0) + 1;
+    });
     el.legend.querySelectorAll("[data-n]").forEach(function (s) {
       s.textContent = count[s.dataset.n] || 0;
     });
   }
 
   function buildOverlayFilters() {
-    el.ovFilters.innerHTML = TYPES.map(function (t) {
-      return '<button class="lg' + (state.ovShow[t] ? "" : " is-off") + '" type="button" data-type="' + t + '"' +
-        ' data-type-color="' + t + '" aria-pressed="' + (state.ovShow[t] ? "true" : "false") + '">' +
-        '<span class="lg-dot"></span><span>' + TYPE_LABEL[t] + "</span></button>";
-    }).join("") + '<span class="ov-family-label">Connections</span>' +
+    el.ovFilters.innerHTML = filterChips(state.ovShow, false) +
+      '<span class="ov-family-label">Connections</span>' +
       [{id:"cited",label:"Cited"},{id:"cross",label:"Cross-corpus"},{id:"editorial",label:"Editorial"},{id:"derived",label:"Topical"}].map(function (f) {
         return '<button class="edge-filter" type="button" data-family="' + f.id + '" aria-pressed="true">' + f.label + '</button>';
       }).join("");
-    el.ovFilters.querySelectorAll(".lg").forEach(function (b) {
-      b.setAttribute("data-type", b.dataset.type);
-      b.addEventListener("click", function () {
-        var t = b.dataset.type;
-        state.ovShow[t] = !state.ovShow[t];
-        b.classList.toggle("is-off", !state.ovShow[t]);
-        b.setAttribute("aria-pressed", state.ovShow[t] ? "true" : "false");
-        paintOverlay();
-      });
-    });
+    wireChips(el.ovFilters, state.ovShow, function () { paintOverlay(); });
     el.ovFilters.querySelectorAll("[data-family]").forEach(function (b) {
       b.addEventListener("click", function () {
         var family = b.dataset.family; state.edgeShow[family] = !state.edgeShow[family];
@@ -2424,7 +2517,8 @@
 
     el.ovInspect.innerHTML =
       '<div class="ov-inspect-head">' +
-        '<p class="kicker" data-type="' + n.type + '">' + esc(shortLabel(n)) + "</p>" +
+        '<p class="kicker" data-type="' + n.type + '" data-corpus="' + actOf(n) + '">' +
+          esc(shortLabel(n)) + "</p>" +
         "<h3>" + esc(nodeTitle(n, 90)) + "</h3>" +
         '<button class="ov-inspect-close icon-btn" type="button" title="Clear selection"' +
           ' aria-label="Clear selection">' +
@@ -2478,7 +2572,8 @@
       ' provisions in this view. Open a provision to inspect its outgoing links and backlinks.</p><div class="graph-list-grid">' +
       nodes.map(function (node) {
         return '<button class="graph-list-node" type="button" data-id="' + esc(node.id) + '">' +
-          '<span class="link-id" data-type="' + node.type + '">' + esc(node.label) + '</span>' +
+          '<span class="link-id" data-type="' + node.type + '" data-corpus="' + node.act + '">' +
+          glyphSvg(node.kind) + esc(node.label) + '</span>' +
           '<span class="link-title">' + esc(node.title || node.label) + '</span></button>';
       }).join("") + '</div>';
   }
@@ -2670,7 +2765,8 @@
       el.results.innerHTML = hits.map(function (h, i) {
         var n = N[h.s.id];
         return '<button class="res" id="result-' + i + '" role="option" aria-selected="false" tabindex="-1" type="button" data-i="' + i + '" data-id="' + n.id + '">' +
-          '<div class="res-top"><span class="res-id" data-type="' + n.type + '">' + esc(shortLabel(n)) + "</span>" +
+          '<div class="res-top"><span class="res-id" data-type="' + n.type + '" data-corpus="' +
+            actOf(n) + '">' + glyphSvg(kindOf(n)) + esc(shortLabel(n)) + "</span>" +
           '<span class="res-title">' + esc(n.type === "definition" ? "‘" + n.term + "’" : (nodeTitle(n, 90) || n.label)) + "</span></div>" +
           '<div class="res-snip">' + snippet(h.s.text, words) + "</div></button>";
       }).join("");
