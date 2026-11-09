@@ -10,11 +10,14 @@ uses vanilla JavaScript and no frontend framework.
 
 ## Run locally
 
-Serve the repository root with the bundled server, then open it in a browser.
-It resolves extensionless URLs the way the deployment does (`cleanUrls`), which
+Generate the static pages, serve the repository root with the bundled server,
+then open it in a browser. The pages are not committed, so run the generator
+after cloning and after any change to `data/` or `build/static_pages.py`. The
+server resolves extensionless URLs the way the deployment does (`cleanUrls`), which
 a plain `python3 -m http.server` does not.
 
 ```sh
+python3 build/static_pages.py
 python3 build/serve.py 4173
 ```
 
@@ -53,6 +56,10 @@ The build writes:
 - `data/*.json` — corpus data, graph edges, topics, and change data
 - `aia/`, `gdpr/`, `dora/`, and related directories — static provision pages
 - `map.html`, `graph.html`, `changes.html`, `topics.html`, and `sitemap.html`
+
+Only `data/*.json` is committed. The static pages are ignored by git and
+generated on each deployment: `vercel.json` runs `build/static_pages.py`, which
+needs only the Python standard library and the committed data.
 
 ## Project layout
 

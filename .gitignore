@@ -4,6 +4,26 @@ node_modules/
 __pycache__/
 *.pyc
 
+# Static pages, written by build/static_pages.py from data/*.json. The
+# deployment generates them as its build command; run the script locally
+# before previewing.
+/.static-pages.json
+/aia/
+/bafin-ai/
+/dora/
+/dora-its-register/
+/dora-rts-rmf/
+/dora-rts-sub/
+/gdpr/
+/kimig/
+/marisk/
+/agents.html
+/changes.html
+/graph.html
+/map.html
+/sitemap.html
+/topics.html
+
 # Local working documents, unrelated to the browser corpus.
 IMPP - DFKI Deutsch formatiert.docx
 IMPP - DFKI mit Ihren Änderungen und Ergänzungen.docx
