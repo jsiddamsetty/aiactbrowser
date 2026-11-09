@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The brand mark: three provisions that cite each other. -->
+  <rect width="32" height="32" rx="7" fill="#1F4FCC"/>
+  <path d="M16 9.5 8.5 22h15z" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" opacity=".7"/>
+  <circle cx="8.5" cy="22" r="3.6" fill="#fff"/>
+  <circle cx="23.5" cy="22" r="3.6" fill="#fff"/>
+  <circle cx="16" cy="9.5" r="4" fill="#FFCC00"/>
+</svg>

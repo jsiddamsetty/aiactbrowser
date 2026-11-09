@@ -12,7 +12,7 @@ from urllib.parse import quote
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 MANIFEST = ROOT / ".static-pages.json"
-NODE_KEYS = ("articles", "recitals", "annexes", "definitions", "guidance", "kimig", "modules")
+NODE_KEYS = ("articles", "gdpr", "recitals", "annexes", "definitions", "guidance", "kimig", "modules")
 PREFIXES = (
     ("art_", "article"), ("rct_", "recital"), ("anx_", "annex"),
     ("def_", "term"), ("par_", "section"), ("module_", "module"),
@@ -46,13 +46,55 @@ def route_hashes(markup):
     return re.sub(r'href="#/([^"#]+)"', replace, markup or "")
 
 
-def page(title, body, description=""):
-    desc = html.escape(description or title, quote=True)
+# The reader's own route kinds (ID_TO_ROUTE in assets/app.js). Only prefixes
+# listed here resolve back to the same node there, so only these pages forward.
+APP_KINDS = {
+    "art_": "article", "rct_": "recital", "anx_": "annex", "def_": "term",
+    "gdl_": "guidance", "par_": "section", "module_": "module",
+}
+
+# Browsers are sent on to the interactive reader at the same provision; link
+# unfurlers, crawlers and agents do not run this and keep the static page with
+# its own title and description. ?static keeps a browser here too. A paragraph
+# anchor (#p2) becomes the reader's paragraph segment, and a reader hash that
+# was resolved against this page (/aia/article/5#/aia/article/6) is honoured.
+FORWARD = """<script>(function(){var h=location.hash,r=%s;if(/[?&]static\\b/.test(location.search)||/bot|crawl|spider|slurp|preview|facebookexternalhit|embed/i.test(navigator.userAgent))return;if(h.indexOf("#/")===0)location.replace("/"+h);else if(r)location.replace("/#"+r+(/^#(?:p|pt)\\d+[a-z]*$/i.test(h)?"/"+h.slice(1):""));})();</script>"""
+
+
+def app_route(node_id):
+    corpus, local = node_id.split(":", 1)
+    for prefix, kind in APP_KINDS.items():
+        if local.startswith(prefix):
+            return "/%s/%s/%s" % (corpus, kind, quote(local[len(prefix):], safe=""))
+    return None
+
+
+def clip(text, limit=200):
+    text = " ".join((text or "").split())
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
+def page(title, body, description="", app=None, kind="website", heading="", within=""):
+    # Article 5 exists in several instruments; a preview has to say which.
+    full = "%s — %s" % (title, heading) if heading else title
+    if within and within.lower() not in full.lower():
+        full += " · " + within
+    desc = html.escape(clip(description) or full, quote=True)
+    head = (
+        '<meta property="og:site_name" content="AI Act Browser">'
+        '<meta property="og:type" content="%s">'
+        '<meta property="og:title" content="%s">'
+        '<meta property="og:description" content="%s">'
+        '<meta name="twitter:card" content="summary">'
+    ) % (kind, html.escape(full, quote=True), desc)
+    head += FORWARD % json.dumps(app)
     return """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>%s — AI Act Browser</title><meta name="description" content="%s"><link rel="stylesheet" href="/assets/static.css"></head>
+<title>%s — AI Act Browser</title><meta name="description" content="%s">%s<link rel="stylesheet" href="/assets/static.css"></head>
 <body class="agent-page"><main class="agent-wrap"><nav class="agent-nav"><a href="/">AI Act Browser</a><a href="/aia">EU AI Act</a><a href="/gdpr">GDPR</a><a href="/map">Interaction map</a><a href="/changes">Changes</a></nav>%s
-<footer class="agent-footer">Static reading page. The interactive reader remains available at <a href="/#/">the application home</a>.</footer></main></body></html>""" % (html.escape(title), desc, body)
+<footer class="agent-footer">Static reading page. The interactive reader remains available at <a href="/#/">the application home</a>. Built by <a href="https://jsiddamsetty.com">Jayanth Siddamsetty</a>. Not legal advice. Check the official sources.</footer></main></body></html>""" % (html.escape(title), desc, head, body)
 
 
 def node_title(node):
@@ -121,7 +163,7 @@ def corpus_page(slug, document, written):
         html.escape(meta.get("bindingLevel") or "Legal text"), html.escape(title), html.escape(summary))
     body += source_link(source_url(document))
     body += "".join(lists)
-    write(Path(slug) / "index.html", page(title, body, summary), written)
+    write(Path(slug) / "index.html", page(title, body, summary, app="/" + slug), written)
 
     for index, node in enumerate(nodes):
         previous = nodes[index - 1] if index else None
@@ -137,7 +179,9 @@ def corpus_page(slug, document, written):
             html.escape(node_title_text), html.escape(node.get("title") or ""), links,
             source_link(source_url(document, node)), node_body(node))
         route = node_route(node["id"]).lstrip("/")
-        write(Path(route + ".html"), page(node_title_text, body, node.get("text", "")[:180]), written)
+        write(Path(route + ".html"), page(
+            node_title_text, body, node.get("text", ""), app=app_route(node["id"]), kind="article",
+            heading=node.get("title") or "", within=title), written)
 
 
 def overview_pages(registry, written):
@@ -152,24 +196,24 @@ def overview_pages(registry, written):
     relations = read("relations.json").get("relations", [])
     rels = "".join("<li><strong>%s → %s</strong><br>%s</li>" % (
         html.escape(item["from"]), html.escape(item["to"]), html.escape(item.get("explanation", ""))) for item in relations)
-    write(Path("map.html"), page("Interaction map", '<p class="agent-kicker">Interaction map</p><h1>How the rules connect</h1><ul>%s</ul>' % rels), written)
+    write(Path("map.html"), page("Interaction map", app="/map", body='<p class="agent-kicker">Interaction map</p><h1>How the rules connect</h1><ul>%s</ul>' % rels), written)
 
     graph_links = "".join('<li><a href="/%s">%s</a></li>' % (
         html.escape(item["slug"]), html.escape(item.get("shortTitle") or item["slug"]))
         for item in items if item.get("dataFile") and item["slug"] != "commission-guidance")
-    write(Path("graph.html"), page("Citation graph", '<p class="agent-kicker">Citation graph</p><h1>Browse the graph as linked documents</h1><p class="agent-summary">The interactive graph is canvas-based. Its complete source texts and addressable nodes are available below as ordinary links.</p><ul>%s</ul>' % graph_links), written)
+    write(Path("graph.html"), page("Citation graph", app="/graph", body='<p class="agent-kicker">Citation graph</p><h1>Browse the graph as linked documents</h1><p class="agent-summary">The interactive graph is canvas-based. Its complete source texts and addressable nodes are available below as ordinary links.</p><ul>%s</ul>' % graph_links), written)
 
     changes = read("changes.json")
     rows = "".join("<li><a href=\"%s\">%s</a> — %s</li>" % (
         node_route(item["id"]), html.escape(item.get("label") or item["id"]), html.escape(item.get("status") or ""))
         for item in changes.get("items", []))
-    write(Path("changes.html"), page("Changes", '<p class="agent-kicker">Digital Omnibus on AI</p><h1>What changed in 2026</h1><ul>%s</ul>' % rows), written)
+    write(Path("changes.html"), page("Changes", app="/changes", body='<p class="agent-kicker">Digital Omnibus on AI</p><h1>What changed in 2026</h1><ul>%s</ul>' % rows), written)
 
     topics = read("topics.json")
     topic_rows = "".join("<li><strong>%s</strong>: %s</li>" % (
         html.escape(topic.get("label") or topic.get("name") or "Topic"),
         html.escape(topic.get("description") or "")) for topic in topics.get("topics", []))
-    write(Path("topics.html"), page("Topics", '<p class="agent-kicker">Requirement matrix</p><h1>Topics across instruments</h1><ul>%s</ul>' % topic_rows), written)
+    write(Path("topics.html"), page("Topics", app="/map", body='<p class="agent-kicker">Requirement matrix</p><h1>Topics across instruments</h1><ul>%s</ul>' % topic_rows), written)
 
 
 def main():

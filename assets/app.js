@@ -196,7 +196,9 @@
       if (!el.overlay.hidden) full.resize();
     }, 160));
 
-    window.addEventListener("hashchange", renderAsync);
+    window.addEventListener("hashchange", onNavigate);
+    window.addEventListener("popstate", onNavigate);
+    document.addEventListener("click", swallowSameRoute, true);
     renderAsync();
   }
 
@@ -273,7 +275,7 @@
   }
 
   function routeCorpus() {
-    var bits = (location.hash || "#/aia").replace(/^#\/?/, "").split("/");
+    var bits = (currentHash() || "#/aia").replace(/^#\/?/, "").split("/");
     if (bits[0] === "map") return null;
     if (bits[0] === "changes" || bits[0] === "graph" || !bits[0]) return "aia";
     if ({ article: 1, recital: 1, annex: 1, term: 1, guidance: 1, kimig: 1, gdpr: 1 }[bits[0]]) return bits[0] === "gdpr" ? "gdpr" : bits[0] === "kimig" ? "kimig" : "aia";
@@ -300,7 +302,7 @@
   }
 
   function parseHash() {
-    var h = (location.hash || "#/").replace(/^#\/?/, "");
+    var h = (currentHash() || "#/").replace(/^#\/?/, "");
     if (!h || h === "aia") return { kind: "home" };
     var bits = h.split("/");
     if (bits[0] === "guidance") {
@@ -362,15 +364,78 @@
     return route.id ? routeOf(route.id) : "#/";
   }
 
+  /* ── address bar ──────────────────────────────────────────────
+     Routing is hash-based, but a fragment never reaches a server, so every
+     hash link unfurls as the home page. Once a route is rendered the address
+     bar is rewritten to the matching static page (/aia/article/50), which
+     carries its own title and description and forwards browsers back here.
+     The hash the reader is on then lives in history.state. */
+
+  var PATH_URLS = /^https?:$/.test(location.protocol) && location.pathname === "/";
+  var STATIC_KINDS = { art_: "article", rct_: "recital", anx_: "annex", def_: "term", gdl_: "guidance", par_: "section", module_: "module" };
+
+  function currentHash() {
+    var h = location.hash;
+    if (h.indexOf("#/") === 0) return h;
+    return (history.state && history.state.hash) || h;
+  }
+
+  function hasStaticPages(slug) {
+    var entry = registryEntry(slug);
+    return !!(entry && entry.dataFile && slug !== "commission-guidance");
+  }
+
+  /* The shareable URL for a route: its static page where the build writes
+     one, otherwise the hash route on the application root. */
+  function addressOf(hash, r) {
+    if (r.kind === "home") return "/";
+    if (r.kind === "map") return "/map";
+    if (r.kind === "changes" && !r.focus) return "/changes";
+    if (r.kind === "doc" && hasStaticPages(r.doc)) return "/" + r.doc;
+    if (r.kind === "node" && r.id) {
+      var cut = r.id.indexOf(":"), corpus = r.id.slice(0, cut), local = r.id.slice(cut + 1);
+      var p = Object.keys(STATIC_KINDS).filter(function (prefix) { return local.indexOf(prefix) === 0; })[0];
+      if (p && hasStaticPages(corpus)) {
+        return "/" + corpus + "/" + STATIC_KINDS[p] + "/" + encodeURIComponent(local.slice(p.length)) + (r.para ? "#" + r.para : "");
+      }
+    }
+    return "/" + hash;
+  }
+
+  function setAddress(hash, r) {
+    if (!PATH_URLS) return;
+    var url = addressOf(hash, r);
+    if (url === location.pathname + location.hash && history.state && history.state.hash === hash) return;
+    history.replaceState({ hash: hash }, "", url);
+  }
+
+  /* Back and forward between two path URLs fire popstate only; between a
+     path and a hash URL they fire both. Coalesce into one render. */
+  var navQueued = false;
+  function onNavigate() {
+    if (navQueued) return;
+    navQueued = true;
+    setTimeout(function () { navQueued = false; renderAsync(); }, 0);
+  }
+
+  /* With the hash out of the address bar, a link to the route already on
+     screen would count as a navigation and stack a duplicate history entry. */
+  function swallowSameRoute(ev) {
+    if (!PATH_URLS || ev.defaultPrevented || ev.button || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    var a = ev.target.closest && ev.target.closest("a[href^='#/']");
+    if (a && !a.target && a.getAttribute("href") === currentHash() && location.hash.indexOf("#/") !== 0) ev.preventDefault();
+  }
+
   function go(hash) {
     if (/^https?:\/\//.test(hash)) { window.open(hash, "_blank", "noopener"); return; }
-    if (location.hash === hash) render();
+    if (currentHash() === hash) render();
     else location.hash = hash;
   }
 
   function render() {
     var r = parseHash();
     if (r.kind === "loading") return;
+    setAddress(currentHash() || "#/", r);
 
     if (r.kind === "graph") {
       // Opening a focused graph URL cold: render the provision behind the
@@ -772,7 +837,9 @@
       '<a class="home-map-launch" href="#/map">' +
       '<span class="home-map-label">Legal relationship map</span>' +
       '<span class="home-map-copy">Trace how the AI Act connects with GDPR, DORA, KI-MIG and supervisory guidance.</span>' +
-      '<span class="home-map-go">Open the map</span></a>' + checkedOn() + '</aside></div>';
+      '<span class="home-map-go">Open the map</span></a>' + checkedOn() +
+      '<p class="data-checked">Built by <a href="https://jsiddamsetty.com">Jayanth Siddamsetty</a>. ' +
+      'Not legal advice. Check the official sources.</p></aside></div>';
 
     h += '<a class="banner" href="#/changes">' +
       '<span class="banner-tag">In force from ' + esc(m.inForce) + "</span>" +
@@ -2648,8 +2715,10 @@
     tipForNode(null);
     if (overlayReturnFocus && overlayReturnFocus.focus) overlayReturnFocus.focus();
     overlayReturnFocus = null;
-    if (!silent && /^#\/graph(\/|$)/.test(location.hash)) {
-      history.replaceState(null, "", hashOf(state.route));
+    if (!silent && /^#\/graph(\/|$)/.test(currentHash())) {
+      var back = hashOf(state.route), was = state.route || { kind: "home" };
+      if (PATH_URLS) setAddress(back, was.kind === "node" ? { kind: "node", id: was.id } : was);
+      else history.replaceState(null, "", back);
     }
   }
 

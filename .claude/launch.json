@@ -4,13 +4,13 @@
     {
       "name": "aiact",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8377"],
+      "runtimeArgs": ["build/serve.py", "8377"],
       "port": 8377
     },
     {
       "name": "aiact-2",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8378"],
+      "runtimeArgs": ["build/serve.py", "8378"],
       "port": 8378
     }
   ]

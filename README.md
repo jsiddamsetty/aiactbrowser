@@ -10,14 +10,20 @@ uses vanilla JavaScript and no frontend framework.
 
 ## Run locally
 
-Serve the repository root with any static server, then open it in a browser.
+Serve the repository root with the bundled server, then open it in a browser.
+It resolves extensionless URLs the way the deployment does (`cleanUrls`), which
+a plain `python3 -m http.server` does not.
 
 ```sh
-python3 -m http.server 4173
+python3 build/serve.py 4173
 ```
 
-The interactive app uses hash routes, such as `/#/aia/article/6` and
-`/#/gdpr`.
+The interactive app routes on hashes, such as `/#/aia/article/6` and `/#/gdpr`,
+but once a provision is on screen it rewrites the address bar to that
+provision's static page (`/aia/article/6`). A hash never reaches a server, so
+hash links all unfurl as the home page; the static page carries its own title
+and description for link previews and forwards browsers back into the reader.
+Append `?static` to stay on the static page.
 
 ## Agent and crawler access
 
