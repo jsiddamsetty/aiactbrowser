@@ -10,6 +10,13 @@ Phases 1, 4 and 5.
 
 ## Where the codebase stands
 
+**Status, October 2026: Phases 0–5 have all shipped.** The notes below were
+written before the namespacing refactor and are kept for the reasoning; where
+they describe the single-corpus scheme (`data/aiact.json`, bare ids like
+`art_4`), read it as the state Phase 1 moved away from. Every corpus now has
+its own file in `data/` and every node a document prefix — `aia:art_4`,
+`gdpr:rct_7`, `kimig:par_2`, `marisk:module_AT-4.3.2`.
+
 The portal is a static site (vanilla JS, no build step for the frontend):
 
 - `build/parse.py` — parses EUR-Lex Official Journal HTML (ELI/CONVEX markup)
@@ -21,33 +28,45 @@ The portal is a static site (vanilla JS, no build step for the frontend):
   mapping of guidance sections to the provisions/terms they interpret.
 - `build/parse_kimig.py` — parses the KI-MIG (German implementing law,
   gesetze-im-internet.de XML) into `kimig_*` section nodes. It is the first
-  second corpus, added before Phase 1, so it rides the single-corpus scheme:
-  its IDs are prefixed `kimig_` (not `kimig:`), it lives inside `aiact.json`,
-  and its citations of the Act are plain `cites` edges. Its `resolve()` is
+  second corpus, added before Phase 1, so it rode the single-corpus scheme:
+  its IDs were prefixed `kimig_` (not `kimig:`), it lived inside `aiact.json`,
+  and its citations of the Act were plain `cites` edges. Its `resolve()` is
   already a small router for **German** citation forms ("Artikel 70 Absatz 1
   der Verordnung (EU) 2024/1689", "§ 2 Absatz 3", "Artikel 3 Nummer 48" →
   `def_48`) and the obvious starting point for MaRisk's German patterns in
-  Phase 5. Phase 1 must migrate it: `kimig_2` → `kimig:par_2`, route
-  `#/kimig/2` kept as a redirect.
+  Phase 5. Phase 1 migrated it to `kimig:par_2`; the old route `#/kimig/2`
+  redirects to `#/kimig/section/2`.
 - `build/parse_gdpr.py` — the GDPR, added ahead of Phases 1–2. Like the
-  KI-MIG it rides the single-corpus scheme: `gdpr_4` ids inside `aiact.json`,
+  KI-MIG it rode the single-corpus scheme: `gdpr_4` ids inside `aiact.json`,
   routes `#/gdpr/4`. It runs `parse_consolidated` on the EUR-Lex consolidated
-  export. Phase 1 must migrate it too: `gdpr_4` → `gdpr:art_4`.
+  export, and `source-gdpr-oj.html` for the recitals. Phase 1 migrated it to
+  `gdpr:art_4` in `data/gdpr.json`.
 - `build/parse_bafin.py` — BaFin's 2026 Guidance on ICT Risks in the Use of AI,
   a Phase 5 item added early. Its sections are guidance nodes
   (`gdl_bafin-V.1`) with `act: None`, so their bare references are not taken
   to be the Act's. Its link to the Act is the first concordance:
   `CONCORDANCE` → `concords` edges, each carrying a `why`.
-- `build/build.py` — assembles `data/aiact.json` (the Act + graph) and
-  `data/changes.json` (the Digital Omnibus redlines). Run: `python3 build/build.py`.
-- `assets/app.js` — hash-routed SPA (`#/article/4`, `#/term/52`, `#/graph`…),
-  route mapping lives in `ROUTE_TO_ID`/`ID_TO_ROUTE` (~line 129).
+- `build/parse_eu.py` — the generic EUR-Lex parser the later corpora use;
+  `build/parse_marisk.py` — MaRisk, from the circular PDF in the repo root.
+- `build/build.py` — assembles one file per corpus (`data/aia.json`,
+  `data/gdpr.json`, `data/dora*.json`, `data/kimig.json`, `data/marisk.json`,
+  `data/bafin-ai.json`), plus `data/xrefs.json` (cross-corpus edges),
+  `data/registry.json` (the instrument registry), `data/topics.json`,
+  `data/relations.json` and `data/changes.json` (the Digital Omnibus
+  redlines). Run: `python3 build/build.py`.
+- `assets/app.js` — hash-routed SPA (`#/aia/article/4`, `#/aia/term/52`,
+  `#/graph`…; the un-prefixed routes redirect), route mapping lives in
+  `ROUTE_TO_ID`/`ID_TO_ROUTE`.
   `assets/graph.js` — the graph views. Dev server: `.claude/launch.json`
   ("aiact", port 8377) or any static server at the repo root.
 
-Node IDs are bare and single-corpus: `art_4`, `rct_10`, `anx_III`, `def_52`,
-`gdl_pp-5`, `omr_9` (omnibus recitals). Edge kinds: `cites`, `annex`, `uses`,
-`explains`, `relates` (TF-IDF-derived), `interprets` (editorial).
+Node IDs carry a corpus prefix: `aia:art_4`, `aia:rct_10`, `aia:anx_III`,
+`aia:def_52`, `aia:gdl_pp-5`, `aia:omr_9` (omnibus recitals), `gdpr:art_35`,
+`dora:art_6`, `kimig:par_2`, `marisk:module_AT-4.3.2`, and `ext:…` for
+instruments outside the corpus. Edge kinds: `cites`, `annex`, `uses`,
+`explains`, `relates` (TF-IDF-derived), `interprets` (editorial), plus
+`xcites` (cross-corpus) and `concords` (editorial concordance) in
+`data/xrefs.json`.
 
 **Recent context that matters** (commit `2438b8d`): reference extraction now
 has a deflection guard, `deflected()` in `build/parse.py`. It recognizes when
@@ -78,16 +97,21 @@ Phase 2's per-section override table can.
 ## Phase 0 — regression guard (done: the edge diff, not unit tests)
 
 The sources are fixed documents, so the only thing that regresses is parser
-code. Decided against a `test_refs.py` suite: `build.py` now ends by listing
-every edge added or dropped against the committed `data/aiact.json`
-(`report_edges`), which catches the whole class of bug without hand-written
-cases. Switching the deflection guard off to check it reproduces the original
-profiling bug as `+ art_3 cites art_4` among 273 new edges. Review that list
-before committing any parser change.
+code. Decided against a `test_refs.py` suite: `build.py` ends by listing
+every edge added or dropped against the committed data (`report_edges`),
+which catches the whole class of bug without hand-written cases.
 
-Phase 1 renames every ID, so its first build will report all edges as changed.
-Compare with the prefix stripped for that one commit — the list should be
-empty — then carry on as normal.
+> **The guard is currently inert.** `committed_edges()` still reads
+> `git show HEAD:data/aiact.json`, the file Phase 1 replaced with one file
+> per corpus, so every build prints "no committed data/aiact.json to compare
+> with" and compares nothing. Point it at the per-corpus files (and union
+> their edges with `data/xrefs.json`) before trusting a parser change again.
+
+Switching the deflection guard off to check it reproduces the original
+profiling bug as `+ art_3 cites art_4` among 273 new edges. Review that list
+before committing any parser change. (Phase 1 renamed every ID, so its first
+build reported every edge as changed; the check there was to compare with the
+prefix stripped and see an empty list.)
 
 The citation forms the parsers must keep getting right, worth eyeballing in
 the diff whenever `deflected()`/`article_refs` change:
@@ -112,7 +136,7 @@ the diff whenever `deflected()`/`article_refs` change:
   2016/679", to="gdpr")` → `["gdpr_4"]`; "Article 35 GDPR" → `gdpr_35`;
   inside the GDPR (`doc="gdpr"`) a bare "Article 6(1)" → `gdpr_6`.
 
-## Phase 1 — namespacing refactor (no new content)
+## Phase 1 — namespacing refactor (done)
 
 Break the single-corpus assumptions before adding a second corpus.
 
@@ -136,12 +160,12 @@ Acceptance: site behaves identically for the AI Act; old URLs redirect;
 `python3 build/build.py` still produces valid data; the edge diff, prefixes
 stripped, is empty.
 
-## Phase 2 — the deflection guard becomes a router; external stubs
+## Phase 2 — the deflection guard becomes a router; external stubs (done)
 
-*Partly done with the GDPR ingest: `cited_act()` routes references to acts in
-the corpus. External stubs, the override table and the UI toggle remain.*
-
-Ship this *before* ingesting new corpora — it is a visible win on its own.
+*Done. `cited_act()` routes references to acts in the corpus as `xcites`
+edges in `data/xrefs.json`; references to instruments outside it become
+`ext:` stub nodes — 78 of them — drawn as hollow rings with a link to the
+source, and cross-corpus edges have their own filter toggle.*
 
 1. Extend `deflected()` (or a sibling `resolve_ref()`) to return *which*
    instrument it matched, not just True/False. Build the instrument table
@@ -213,9 +237,10 @@ licensing or accounts. Follow the existing naming convention
 
 *Done, ahead of Phases 1–2.* What was built differs from the notes below:
 
-- The source is the EUR-Lex **consolidated** export (`build/source-gdpr.html`,
-  04.05.2016, corrigendum worked in), so there are **no recitals** yet. They
-  need the OJ export, as the AI Act's do.
+- The articles come from the EUR-Lex **consolidated** export
+  (`build/source-gdpr.html`, 04.05.2016, corrigendum worked in); the 173
+  recitals were added afterwards from the OJ export
+  (`build/source-gdpr-oj.html`), as the AI Act's are.
 - Article 4's definitions stay inside the article as addressable points
   (`#/gdpr/4/pt4`), not as term nodes.
 - The corrigendum's ▼C1 marks are stripped rather than shown as amendments.
@@ -240,7 +265,7 @@ to do.
   likewise personal data (def_50), biometric data, DPIA references in
   Articles 26/27, and the many recital mentions.
 
-## Phase 4 — DORA ingest
+## Phase 4 — DORA ingest (done)
 
 - Source: 32022R2554, same EUR-Lex markup. Definitions in Article 3
   (64 terms). Check whether a consolidated version differs from the OJ text.
@@ -249,7 +274,7 @@ to do.
   `interprets` edges to the DORA articles they implement.
 - Add DORA to the instrument table so AI Act ↔ DORA references route.
 
-## Phase 5 — MaRisk and BaFin AI/ICT (the hard one)
+## Phase 5 — MaRisk and BaFin AI/ICT (done; it was the hard one)
 
 Different in kind from the EUR-Lex corpora; budget the most time here.
 
@@ -285,21 +310,28 @@ Different in kind from the EUR-Lex corpora; budget the most time here.
 
 ## Portal improvements independent of the extension
 
-- Paragraph permalinks: article HTML already carries
-  `<section class="para" data-para="N">` anchors; expose `#/article/26/p9`.
-- Applicability timeline: amendment status exists (changes.json); GDPR/DORA
-  add staggered application dates suiting the same treatment.
+- Paragraph permalinks — **done**: `#/aia/article/26/p9` opens the article at
+  that paragraph, and backlinks carrying an `at` paragraph route there.
+- Applicability timeline — **done**: `#/aia/timeline`. GDPR and DORA's
+  staggered application dates are not on it yet.
 - Search: currently substring over a per-node haystack; per-corpus indexes
-  are required by Phase 1 anyway — consider adding term-boosted ranking.
+  arrived with Phase 1 — term-boosted ranking is still worth considering.
 
 ## Ordering and effort (rough)
 
 0. Regression guard — done (edge diff in `build.py`).
-1. Namespacing — medium refactor, touches build + app.js routing.
-2. Router + stubs — medium, mostly `parse.py`/`build.py`, small UI additions.
-3. GDPR — done for the articles; recitals and EDPB guidance remain.
-4. DORA — small-medium.
-5. MaRisk/BaFin — large (new parser, language, editorial concordance).
+1. Namespacing — done.
+2. Router + stubs — done (`xcites` edges, `ext:` stubs, cross-corpus toggle).
+3. GDPR — done, articles and recitals. EDPB guidance remains.
+4. DORA — done, with RTS RMF, RTS Subcontracting and the ITS register.
+5. MaRisk/BaFin — done. The editorial concordance exists (`concords` edges)
+   but is thin: growing it is the open work, not the parsing.
+
+What remains from this plan: EDPB guidance, a fuller concordance, and the
+candidate instruments listed in `INTERPLAY.md` (BDSG, EBA guidelines). The
+big-picture views in `INTERPLAY.md` are half shipped: the instrument map is
+live at `#/map`, while the requirement matrix and topic pages are not —
+`#/matrix` and `#/topic/<slug>` redirect to the map.
 
 Each phase ends with: `python3 build/build.py` clean, its edge diff read and
 every added or dropped edge accounted for, and a browser check of the profiling term (`#/term/52` → after Phase 1,

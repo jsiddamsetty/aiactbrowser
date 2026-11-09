@@ -37,14 +37,14 @@ are **out of scope**.
 
 | Instrument | Layer | Status | Node ids today |
 |---|---|---|---|
-| Regulation (EU) 2024/1689, **AI Act** (consolidated, in force 27.07.2026) | EU regulation, horizontal | in the browser | `art_`, `rct_`, `anx_`, `def_` |
-| Regulation (EU) 2026/1744, Digital Omnibus on AI | EU amending act | in (the changes page, `omr_`) | `omr_` |
-| Regulation (EU) 2016/679, **GDPR** | EU regulation, horizontal | in (articles; no recitals yet) | `gdpr_` |
-| Commission guidelines on prohibited practices (adopted) and on high-risk classification (draft) | EU guidance on the AI Act | in | `gdl_pp-`, `gdl_hr-` |
-| **KI-MIG**, BGBl. 2026 I Nr. 223 | German law implementing the AI Act | in | `kimig_` |
-| BaFin, **Guidance on ICT Risks in the Use of AI** (23.01.2026) | supervisory guidance on DORA | in | `gdl_bafin-` |
-| Regulation (EU) 2022/2554, **DORA**, with RTS RMF (2024/1774), RTS Subcontracting (2025/532) and the ITS on the register of information | EU sectoral regulation and delegated acts | planned — `PLAN.md` Phase 4 | — |
-| BaFin, **MaRisk**, Rundschreiben 06/2026 (BA), as of 30.06.2026 | BaFin circular | source in the repo root (`2026-06-30-rundschreiben-data.pdf`), not parsed — Phase 5 | — |
+| Regulation (EU) 2024/1689, **AI Act** (consolidated, in force 27.07.2026) | EU regulation, horizontal | in the browser | `aia:art_`, `aia:rct_`, `aia:anx_`, `aia:def_` |
+| Regulation (EU) 2026/1744, Digital Omnibus on AI | EU amending act | in (the changes page) | `aia:omr_` |
+| Regulation (EU) 2016/679, **GDPR** | EU regulation, horizontal | in (articles and recitals) | `gdpr:art_`, `gdpr:rct_` |
+| Commission guidelines on prohibited practices (adopted), on high-risk classification (draft) and on Article 50 transparency (adopted) | EU guidance on the AI Act | in | `aia:gdl_pp-`, `aia:gdl_hr-`, `aia:gdl_tr-` |
+| **KI-MIG**, BGBl. 2026 I Nr. 223 | German law implementing the AI Act | in | `kimig:par_` |
+| BaFin, **Guidance on ICT Risks in the Use of AI** (23.01.2026) | supervisory guidance on DORA | in | `bafin-ai:gdl_` |
+| Regulation (EU) 2022/2554, **DORA**, with RTS RMF (2024/1774), RTS Subcontracting (2025/532) and the ITS on the register of information | EU sectoral regulation and delegated acts | in (Phase 4 done) | `dora:`, `dora-rts-rmf:`, `dora-rts-sub:`, `dora-its-register:` |
+| BaFin, **MaRisk**, Rundschreiben 06/2026 (BA), as of 30.06.2026 | BaFin circular | in (Phase 5 done) | `marisk:module_` |
 
 Candidates to assess later, not yet judged to belong: German data protection
 law (BDSG), EBA guidelines touching model use in credit decisions, EDPB
@@ -70,6 +70,89 @@ Rendering rule, in both views and in the existing graph: cited = solid line;
 legal effect = heavy line with a text badge naming the effect; editorial =
 dashed line, labelled *editorial*, reason on hover or in a panel. Colour never
 carries the distinction alone.
+
+## The provision graph — what a mark says
+
+The provision graph predates these views and answers a smaller question, but
+it sits in the rail beside every provision, so its rendering rules belong
+here next to the map's.
+
+Until October 2026 a node's colour stood for its `type`, and that list mixed
+two different things: `article`, `recital`, `annex`, `definition` and
+`guidance` say what **kind** of provision something is, while `gdpr`, `kimig`
+and `module` say which **instrument** it belongs to. An AI Act article and a
+DORA article were therefore the same blue, and "GDPR" was drawn as though it
+were a kind of provision. Colour looked like it answered "which regulation",
+and did not. The graph now puts each question on its own channel.
+
+### Shape — what kind of provision
+
+| Kind | Mark | Node types |
+|---|---|---|
+| Article | circle | `article`, and the GDPR's `gdpr` nodes |
+| Recital | diamond | `recital` |
+| Annex | square | `annex` |
+| Term | triangle | `definition` |
+| Guidance | bar | `guidance` |
+| Section | hexagon | `kimig`, `module` |
+| Elsewhere | hollow ring | `external` |
+
+Guidance is a bar and not a rounded square because at 6 px a rounded square
+and the annex square are the same mark, and guidance is the Act's most
+numerous kind. External nodes are hollow for the same reason: fill against no
+fill survives sizes at which no silhouette does. The floor on node radius is
+5 px (`nodeR` in `app.js`) — below that every glyph is a dot again, and most
+of the whole-Act view sits at that floor.
+
+The mapping from node type to kind is `TYPE_KIND` in `app.js`; the glyphs
+themselves are drawn twice, by `glyph()` in `graph.js` for the canvas and by
+`GLYPH_PATH` in `app.js` for the legend and the id chips.
+
+### Colour — which instrument
+
+| Colour | Instrument | Corpora |
+|---|---|---|
+| blue | EU AI Act | `aia` |
+| green | GDPR | `gdpr` |
+| amber | DORA | `dora`, `dora-rts-rmf`, `dora-rts-sub`, `dora-its-register` |
+| magenta | BaFin | `marisk`, `bafin-ai` |
+| violet | KI-MIG | `kimig` |
+| grey | elsewhere | `ext` |
+
+The four DORA documents share a hue because they are one body of law, and so
+do the two BaFin texts. Within a hue the label names the document —
+`RTS RMF Art. 28`, `MaRisk AT 4.4.2` — and for BaFin the shape separates them
+as well, MaRisk being sections and the ICT guidance bars; DORA and its
+technical standards are both articles, so there the label carries it alone.
+The mapping lives in two places and nowhere else: `CORPUS_ACT` in `app.js`,
+`--c-act-*` in `styles.css`.
+
+Both channels run through the reader as well. An id chip carries its kind as
+a glyph and its instrument as its colour, so the connections rail teaches the
+graph's alphabet without a legend. Cross-references **inside running text**
+are the deliberate exception: they keep their per-type colours, because in
+prose the kind is already written out ("Recital 20", "Annex III") while
+nothing but the colour says that *provider* is a defined term rather than an
+ordinary word.
+
+### Filters
+
+Two axes, independent of each other: **Kind** (articles, recitals, annexes,
+terms, guidance, sections) and **Act** (the six instruments above). External
+nodes answer to the Act axis alone — a reference out of the corpus has no
+provision kind to filter on. The relationship-family toggles (cited /
+cross-corpus / editorial / topical) are a third control, over edges.
+
+### Interaction
+
+- Click a node → the view re-centres on it and a panel describes it: what it
+  cites, what cites it, each row opening that provision. A click does not
+  leave the graph, so a defined term can be used as a route to the articles
+  that use it, which is what a term node is for.
+- Click the selected node again, double-click any node, or use the panel's
+  *Open* button → that provision's page.
+- Click empty canvas → clear the selection; double-click it → re-fit the view.
+- Routes: `#/graph`, and `#/graph/<id>` for a neighbourhood.
 
 ## View 1 — the instrument map
 
@@ -302,7 +385,7 @@ are related when they share a topic. Ten provisions need ten tags; a new
 provision needs one.
 
 A hand-curated module, reviewed through ordinary git diffs (unlike the
-one-line `data/aiact.json`):
+one-line generated files in `data/`):
 
 ```python
 # build/topics.py
@@ -424,10 +507,10 @@ provisions. A stub never gets a matrix column.
 ### Where the data goes
 
 `data/topics.json` (topics, tags, qualifiers) and `data/relations.json`
-(registry, relations, aggregated counts) — both small. Until Phase 1 splits
-the data into per-corpus files, load them with `aiact.json` at start; the
-provision-page blocks need them on every page. When Phase 1 introduces
-`data/xrefs.json`, tags and relations move into it.
+(registry, relations, aggregated counts) — both small, and both loaded at
+start alongside `data/aia.json`, `data/registry.json` and `data/xrefs.json`,
+because the provision-page blocks need them on every page. The per-corpus
+files that Phase 1 introduced load lazily, per route.
 
 ## Placement in the interface
 
@@ -438,7 +521,8 @@ provision-page blocks need them on every page. When Phase 1 introduces
 - **Provision pages**: the *Same topic in other instruments* and *Legal
   effect* blocks, after the existing guidance and KI-MIG blocks.
 - **Graph views**: relationship-family toggles (cited / legal effect /
-  editorial) and the optional topic hubs.
+  editorial) and the optional topic hubs, alongside the Kind and Act filters
+  over nodes (see *The provision graph*).
 
 ## Accessibility
 
@@ -449,7 +533,9 @@ provision-page blocks need them on every page. When Phase 1 introduces
   page as a list — each instrument with its relationships as sentences
   ("KI-MIG names BaFin as market surveillance authority — § 2(3), § 6").
 - Relationship kinds, qualifiers and binding levels are words, never colour
-  alone; the three connection kinds also differ by line style.
+  alone; the three connection kinds also differ by line style. The same holds
+  for nodes in the provision graph: colour names the instrument, but the kind
+  of provision is a shape, and the legend spells out both in words.
 - Narrow screens: the matrix pivots — pick a topic to list instruments, or an
   instrument to list topics — with a horizontally scrolling table and sticky
   first column as the fallback.
